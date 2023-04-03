@@ -176,7 +176,10 @@ class BOM:
                     self.error(f"Component without MPN: {component.reference}")
 
                 # Check if component has any supplier
-                if any(val is None for val in component.suppliers.values()):
+                if (
+                    any(val is None for val in component.suppliers.values())
+                    and component.mpn != "NO_MPN"
+                ):
                     self.error(
                         f"Error: No supplier specified for: {component.reference}"
                     )
