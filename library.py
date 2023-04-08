@@ -10,6 +10,7 @@ import termcolor
 import kiutils.symbol
 import kiutils.items
 import requests
+import warnings
 
 import utils
 
@@ -76,15 +77,28 @@ class Library:
                 mouser = self.find_property(symbol, "Mouser")
                 mpn = self.find_property(symbol, "MPN")
                 if mouser is not None:
+                    mouser.value = mouser.value.strip()
                     result = utils.search_mouser(mouser.value)
                     part = self.find_matching_part(
                         result, "MouserPartNumber", mouser.value
                     )
+                    if part is None:
+                        print(f"{symbol.entryName}: Mouser ID \"{mouser.value}\" not found on Mouser!")
+                        continue
                 elif mpn is not None:
+                    mpn.value = mpn.value.strip()
                     result = utils.search_mouser(mpn.value)
                     part = self.find_matching_part(
                         result, "ManufacturerPartNumber", mpn.value
                     )
+                    if part is None:
+                        print(f"{symbol.entryName}: MPN \"{mpn.value}\" not found on Mouser!")
+                        continue
+                else:
+                    print(f"{symbol.entryName}: Both MPN and Mouser fields missing!")
+                    continue
+
+
                 self.set_property(symbol, "MPN", part["ManufacturerPartNumber"])
                 self.find_property(symbol, "MPN").effects.hide = True
                 self.set_property(symbol, "Mouser", part["MouserPartNumber"])
@@ -106,6 +120,7 @@ class Library:
 
         if not done:
             new = kiutils.items.common.Property(key=name, value=value)
+            new.effects = kiutils.items.common.Effects()
             symbol.properties.append(new)
 
     def find_matching_part(self, response, key, value):
