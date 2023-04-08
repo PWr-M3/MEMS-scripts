@@ -86,9 +86,12 @@ class Library:
                         result, "ManufacturerPartNumber", mpn.value
                     )
                 self.set_property(symbol, "MPN", part["ManufacturerPartNumber"])
+                self.find_property(symbol, "MPN").effects.hide = True
                 self.set_property(symbol, "Mouser", part["MouserPartNumber"])
+                self.find_property(symbol, "Mouser").effects.hide = True
                 self.set_property(symbol, "ki_description", part["Description"])
                 self.set_property(symbol, "Datasheet", part["DataSheetUrl"])
+                self.find_property(symbol, "Datasheet").effects.hide = True
 
     def find_property(self, symbol, name):
         return next((prop for prop in symbol.properties if prop.key == name), None)
