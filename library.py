@@ -76,12 +76,14 @@ class Library:
                 mouser = self.find_property(symbol, "Mouser")
                 mpn = self.find_property(symbol, "MPN")
                 if mouser is not None:
-                    result = utils.search_mouser(mouser)
-                    part = self.find_matching_part(result, "MouserPartNumber", mouser)
-                elif mpn is not None:
-                    result = utils.search_mouser(mpn)
+                    result = utils.search_mouser(mouser.value)
                     part = self.find_matching_part(
-                        result, "ManufacturerPartNumber", mpn
+                        result, "MouserPartNumber", mouser.value
+                    )
+                elif mpn is not None:
+                    result = utils.search_mouser(mpn.value)
+                    part = self.find_matching_part(
+                        result, "ManufacturerPartNumber", mpn.value
                     )
                 self.set_property(symbol, "MPN", part["ManufacturerPartNumber"])
                 self.set_property(symbol, "Mouser", part["MouserPartNumber"])
@@ -89,17 +91,16 @@ class Library:
                 self.set_property(symbol, "Datasheet", part["DataSheetUrl"])
 
     def find_property(self, symbol, name):
-        return next(
-            (prop.value for prop in symbol.properties if prop.key == name), None
-        )
+        return next((prop for prop in symbol.properties if prop.key == name), None)
 
     def set_property(self, symbol, name, value, overwrite=False):
         done = False
         for prop in symbol.properties:
             if prop.key == name:
+                done = True
                 if overwrite or prop.value in ["", "~"]:
                     prop.value = value
-                    done = True
+
         if not done:
             new = kiutils.items.common.Property(key=name, value=value)
             symbol.properties.append(new)
