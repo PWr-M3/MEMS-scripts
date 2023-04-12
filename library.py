@@ -76,6 +76,13 @@ class Library:
             for symbol in self.sym_lib.symbols:
                 mouser = self.find_property(symbol, "Mouser")
                 mpn = self.find_property(symbol, "MPN")
+                tme = self.find_property(symbol, "TME")
+                reference = self.find_property(symbol, "Reference")
+
+                if reference == "#PWR": #ignore power symbols
+                    continue
+
+
                 if mouser is not None:
                     mouser.value = mouser.value.strip()
                     result = utils.search_mouser(mouser.value)
@@ -83,16 +90,20 @@ class Library:
                         result, "MouserPartNumber", mouser.value
                     )
                     if part is None:
-                        print(f"{symbol.entryName}: Mouser ID \"{mouser.value}\" not found on Mouser!")
+                        if not tme:
+                            print(f"{symbol.entryName}: Mouser ID \"{mouser.value}\" not found on Mouser!")
                         continue
                 elif mpn is not None:
                     mpn.value = mpn.value.strip()
+                    if mpn.value == "NO_MPN":
+                        continue
                     result = utils.search_mouser(mpn.value)
                     part = self.find_matching_part(
                         result, "ManufacturerPartNumber", mpn.value
                     )
                     if part is None:
-                        print(f"{symbol.entryName}: MPN \"{mpn.value}\" not found on Mouser!")
+                        if not tme:
+                            print(f"{symbol.entryName}: MPN \"{mpn.value}\" not found on Mouser!")
                         continue
                 else:
                     print(f"{symbol.entryName}: Both MPN and Mouser fields missing!")
