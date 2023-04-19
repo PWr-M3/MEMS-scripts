@@ -3,3 +3,4 @@
 colorama==0.4.6
 kiutils==1.4.0
 termcolor==2.2.0
+requests==2.28.2
