@@ -36,8 +36,16 @@ def mouser_generator(components, csvwriter):
             print(f"Found")
             stock = get_availability(part, int(component[2]))
             price = get_price(part, int(component[2]))
-            cost = price * int(component[2])
-            available = stock >= int(component[2])
+            if price is not None:
+                cost = price * int(component[2])
+            else:
+                cost = None
+
+            if stock is not None and stock >= int(component[2]):
+                available = True
+            else:
+                print(termcolor.colored("Error: Not enough in stock", "red"))
+                available = False
 
             csvwriter.writerow(
                 [
@@ -67,9 +75,8 @@ def find_matching_part(response, sku):
 
 
 def get_availability(part, count):
-    data = part["Availability"].split()
-    if data[1] == "In" and data[2] == "Stock":
-        return int(data[0])
+    if "AvailabilityInStock" in part and part["AvailabilityInStock"] is not None:
+        return int(part["AvailabilityInStock"])
     else:
         return None
 
@@ -79,6 +86,8 @@ def get_price(part, count):
     for price in price_breaks:
         if int(price["Quantity"]) <= count:
             return float(price["Price"].split()[0].replace(",", "."))
+    else:
+        return None
 
 
 SUPPLIER_GENERATORS = {"Mouser": mouser_generator, "TME": mouser_generator}
@@ -152,7 +161,7 @@ class BOM:
             self.generate_csv_boms()
         self.remove_temp_xml()
         if self.has_errored:
-            sys.exit("There were issues found")
+            sys.exit(termcolor.colored("There were issues found", "red"))
         else:
             print("OK!")
             sys.exit()
