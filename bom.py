@@ -17,9 +17,68 @@ SUPPLIERS = ["Mouser", "TME"]
 
 
 def mouser_generator(components, csvwriter):
-    csvwriter.writerow(["MPN", "SKU", "Quantity"])
+    csvwriter.writerow(
+        [
+            "MPN",
+            "SKU",
+            "Quantity",
+            "Price [zł/unit]",
+            "Price [zł]",
+            "In stock",
+            "Available",
+        ]
+    )
     for component in components:
-        csvwriter.writerow([component[0], component[1], component[2]])
+        print(f"Searching Mouser for {component[1]}")
+        response = utils.search_mouser(component[1])
+        part = find_matching_part(response, component[1])
+        if part is not None:
+            print(f"Found")
+            stock = get_availability(part, int(component[2]))
+            price = get_price(part, int(component[2]))
+            cost = price * int(component[2])
+            available = stock >= int(component[2])
+
+            csvwriter.writerow(
+                [
+                    component[0],
+                    component[1],
+                    component[2],
+                    price,
+                    cost,
+                    stock,
+                    available,
+                ]
+            )
+        else:
+            print(termcolor.colored("Error: Not found", "red"))
+
+
+def find_matching_part(response, sku):
+    return next(
+        (
+            part
+            for part in response["SearchResults"]["Parts"]
+            if "MouserPartNumber" in part
+            and part["MouserPartNumber"].strip() == sku.strip()
+        ),
+        None,
+    )
+
+
+def get_availability(part, count):
+    data = part["Availability"].split()
+    if data[1] == "In" and data[2] == "Stock":
+        return int(data[0])
+    else:
+        return None
+
+
+def get_price(part, count):
+    price_breaks = part["PriceBreaks"]
+    for price in price_breaks:
+        if int(price["Quantity"]) <= count:
+            return float(price["Price"].split()[0].replace(",", "."))
 
 
 SUPPLIER_GENERATORS = {"Mouser": mouser_generator, "TME": mouser_generator}
@@ -170,19 +229,18 @@ class BOM:
     def verify_components(self):
         print("Veryfing components")
         for component in self.components:
-            if not (component.reference[0] in ["C", "R"]):
+            prefix = "".join(char for char in component.reference if not char.isdigit())
+            if not (prefix in ["C", "R", "TP"]):
                 # Check if component has MPN
                 if component.mpn is None:
                     self.error(f"Component without MPN: {component.reference}")
 
                 # Check if component has any supplier
                 if (
-                    any(val is None for val in component.suppliers.values())
+                    all(val is None for val in component.suppliers.values())
                     and component.mpn != "NO_MPN"
                 ):
-                    self.error(
-                        f"Error: No supplier specified for: {component.reference}"
-                    )
+                    self.error(f"No supplier specified for: {component.reference}")
 
     def group_components(self):
         print("Grouping components")
@@ -214,18 +272,20 @@ class BOM:
                         supplier = sup
                         break
 
-            sku = grouped_component.suppliers[supplier] if supplier != "None" else ""
-            if sku is not None:
-                entry = (
-                    mpn,
-                    sku,
-                    grouped_component.count,
+                sku = (
+                    grouped_component.suppliers[supplier] if supplier != "None" else ""
                 )
-                boms[supplier].append(entry)
+                if sku is not None:
+                    entry = (
+                        mpn,
+                        sku,
+                        grouped_component.count,
+                    )
+                    boms[supplier].append(entry)
 
         if len(boms["None"]) > 0:
             self.error(
-                "There were " + str(len(boms["None"])) + " components without supplier"
+                f"There were {str(len(boms['None']))} components without supplier ({[bom[0] for bom in boms['None']]})"
             )
 
         for supplier in self.args.suppliers:
