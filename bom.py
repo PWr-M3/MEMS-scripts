@@ -181,7 +181,7 @@ class BOM:
                     "red",
                 )
             )
-        elif args.path is not None and not os.path.exists(self.args.path):
+        elif self.args.path is not None and not os.path.exists(self.args.path):
             sys.exit(
                 termcolor.colored(
                     f"Error: Specified filename isn't correct ({self.args.path}", "red"
