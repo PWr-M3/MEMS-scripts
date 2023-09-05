@@ -11,9 +11,9 @@ import kiutils.symbol
 import kiutils.items
 import requests
 import warnings
+import time
 
 import utils
-
 
 def add_subparser(parser: argparse.ArgumentParser):
     parser.add_argument(
@@ -26,6 +26,13 @@ def add_subparser(parser: argparse.ArgumentParser):
         dest="fill",
         action="store_true",
         help="Fills in missing fields in library",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        dest="verbose",
+        action="store_true",
+        help="Verbose mode",
     )
     parser.set_defaults(func=run)
 
@@ -78,20 +85,45 @@ class Library:
                 mpn = self.find_property(symbol, "MPN")
                 tme = self.find_property(symbol, "TME")
                 reference = self.find_property(symbol, "Reference")
+                datasheet = self.find_property(symbol, "Datasheet")
 
                 if reference == "#PWR": #ignore power symbols
+                    continue
+
+                if self.args.verbose:
+                        print(symbol.entryName)
+
+                no_missing_values = True
+                for test in [datasheet, mpn, mouser]:
+                    if test is not None:
+                        if test.value.strip() == "" or test.value.strip() == "~":
+                            no_missing_values = False
+                    else:
+                        no_missing_values = False
+
+                if no_missing_values:
                     continue
 
 
                 if mouser is not None:
                     mouser.value = mouser.value.strip()
-                    result = utils.search_mouser(mouser.value)
+                    for attempts in range(30):
+                        result = utils.search_mouser(mouser.value)
+                        if result['Errors'] == []:
+                            break
+                        elif result['Errors'][0]['Code'] == 'TooManyRequests':
+                            print(termcolor.colored(f"Max requests per minute reached, waiting", "white"))
+                            time.sleep(2)
+
+
+
+
                     part = self.find_matching_part(
                         result, "MouserPartNumber", mouser.value
                     )
                     if part is None:
                         if not tme:
-                            print(f"{symbol.entryName}: Mouser ID \"{mouser.value}\" not found on Mouser!")
+                            print(termcolor.colored(f"{symbol.entryName}: Mouser ID \"{mouser.value}\" not found on Mouser!", "red"))
                         continue
                 elif mpn is not None:
                     mpn.value = mpn.value.strip()
@@ -103,11 +135,12 @@ class Library:
                     )
                     if part is None:
                         if not tme:
-                            print(f"{symbol.entryName}: MPN \"{mpn.value}\" not found on Mouser!")
+                            print(termcolor.colored(f"{symbol.entryName}: MPN \"{mpn.value}\" not found on Mouser!", "red"))
                         continue
                 else:
-                    print(f"{symbol.entryName}: Both MPN and Mouser fields missing!")
+                    print(termcolor.colored(f"{symbol.entryName}: Both MPN and Mouser fields missing!", "red"))
                     continue
+
 
 
                 self.set_property(symbol, "MPN", part["ManufacturerPartNumber"])
@@ -123,11 +156,15 @@ class Library:
 
     def set_property(self, symbol, name, value, overwrite=False):
         done = False
+
         for prop in symbol.properties:
             if prop.key == name:
                 done = True
                 if overwrite or prop.value in ["", "~"]:
                     prop.value = value
+                    if self.args.verbose:
+                        print(termcolor.colored(f"SETTING {name} to {value}", "green"))
+
 
         if not done:
             new = kiutils.items.common.Property(key=name, value=value)
@@ -135,14 +172,19 @@ class Library:
             symbol.properties.append(new)
 
     def find_matching_part(self, response, key, value):
-        return next(
-            (
-                part
-                for part in response["SearchResults"]["Parts"]
-                if key in part and part[key] == value
-            ),
-            None,
-        )
+        try:
+            return next(
+                (
+                    part
+                    for part in response["SearchResults"]["Parts"]
+                    if key in part and part[key] == value
+                ),
+                None,
+            )
+        except TypeError:
+            print(termcolor.colored(f"Empty response", "red"))
+            print(response)
+            return None
 
 
 if __name__ == "__main__":
