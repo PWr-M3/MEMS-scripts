@@ -1,6 +1,7 @@
 import argparse
 
 import bom
+import consolidate
 import library
 
 if __name__ == "__main__":
@@ -9,6 +10,10 @@ if __name__ == "__main__":
 
     parser_bom = subparsers.add_parser("bom", help="Generate bom and do bom checks")
     bom.add_subparser(parser_bom)
+
+    parser_consolidate = subparsers.add_parser("consolidate", help="Consolidate component lists into a single list")
+    consolidate.add_subparser(parser_consolidate)
+
     parser_library = subparsers.add_parser(
         "library", help="Helper functions for library maintanance"
     )

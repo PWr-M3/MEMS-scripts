@@ -6,10 +6,10 @@ import xml.etree.ElementTree as ET
 from typing import Tuple
 import pathlib
 import csv
-
+import copy
 import colorama
 import termcolor
-
+import time
 import utils
 
 TEMPFILE_NAME = "temp.xml"
@@ -30,7 +30,14 @@ def mouser_generator(components, csvwriter):
     )
     for component in components:
         print(f"Searching Mouser for {component[1]}")
-        response = utils.search_mouser(component[1])
+
+        for attempts in range(30):
+            response = utils.search_mouser(component[1])
+            if response['Errors'] == []:
+                break
+            elif response['Errors'][0]['Code'] == 'TooManyRequests':
+                print(termcolor.colored(f"Max requests per minute reached, waiting", "white"))
+                time.sleep(2)
         part = find_matching_part(response, component[1])
         if part is not None:
             print(f"Found")
@@ -156,6 +163,7 @@ class BOM:
         self.generate_xml_bom()
         self.parse_xml()
         self.verify_components()
+        self.debunch_components()
         self.group_components()
         if self.args.suppliers is not None:
             self.generate_csv_boms()
@@ -251,20 +259,46 @@ class BOM:
                 ):
                     self.error(f"No supplier specified for: {component.reference}")
 
+    def debunch_components(self):
+        debunched_components = []
+        for component in self.components:
+            if component.mpn is None:
+                continue
+            if component.suppliers is not None: #this part handles + in MPN and SKU
+                for supplier_name in component.suppliers.keys():
+                    if component.suppliers[supplier_name] is not None:
+                        component.mpn = "".join(component.mpn.split()) #remove whitespace
+                        component.suppliers[supplier_name] = "".join(component.suppliers[supplier_name].split())
+                        mpns = component.mpn.split('+')
+                        skus = component.suppliers[supplier_name].split('+')
+                        if len(skus) != len(mpns):
+                            self.error(f'element count in SKU and MPN not equal for {component.mpn}')
+                            continue
+                        for i in range(len(mpns)):
+                            debunched_components.append(copy.deepcopy(component))
+                            debunched_components[-1].mpn = mpns[i]
+                            debunched_components[-1].suppliers[supplier_name] = skus[i]
+        self.components = debunched_components
+
+
     def group_components(self):
         print("Grouping components")
         for component in self.components:
             if component.mpn is None:
                 continue
+
             if component.mpn not in self.grouped_components:
                 self.grouped_components[component.mpn] = ComponentGroup(
                     component.suppliers
                 )
+                #print("ddd",component.suppliers)
             else:
                 self.grouped_components[component.mpn].count += 1
                 self.grouped_components[component.mpn].fill_suppliers(
                     component.suppliers
                 )
+        #for grouped_component in self.grouped_components:
+            #print('X',self.grouped_components[grouped_component].suppliers)
 
     def generate_csv_boms(self):
         print("Generating CSV BOMS")
@@ -274,6 +308,7 @@ class BOM:
             boms[supplier] = []
 
         for mpn, grouped_component in self.grouped_components.items():
+            #print('lk', grouped_component.suppliers)
             if mpn != "NO_MPN":
                 supplier = "None"
                 for sup in self.args.suppliers:
