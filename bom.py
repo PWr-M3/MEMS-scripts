@@ -13,7 +13,7 @@ import time
 import utils
 
 TEMPFILE_NAME = "temp.xml"
-SUPPLIERS = ["Mouser", "TME"]
+SUPPLIERS = ["Mouser", "TME", "Lab"]
 
 
 def mouser_generator(components, csvwriter):
@@ -33,14 +33,18 @@ def mouser_generator(components, csvwriter):
 
         for attempts in range(30):
             response = utils.search_mouser(component[1])
-            if response['Errors'] == []:
+            if response["Errors"] == []:
                 break
-            elif response['Errors'][0]['Code'] == 'TooManyRequests':
-                print(termcolor.colored(f"Max requests per minute reached, waiting", "white"))
+            elif response["Errors"][0]["Code"] == "TooManyRequests":
+                print(
+                    termcolor.colored(
+                        "Max requests per minute reached, waiting", "white"
+                    )
+                )
                 time.sleep(2)
         part = find_matching_part(response, component[1])
         if part is not None:
-            print(f"Found")
+            print("Found")
             stock = get_availability(part, int(component[2]))
             price = get_price(part, int(component[2]))
             if price is not None:
@@ -97,7 +101,27 @@ def get_price(part, count):
         return None
 
 
-SUPPLIER_GENERATORS = {"Mouser": mouser_generator, "TME": mouser_generator}
+def lab_generator(components, csvwriter):
+    csvwriter.writerow(
+        [
+            "Name",
+            "Quantity",
+        ]
+    )
+    for component in components:
+        csvwriter.writerow(
+            [
+                component[0],
+                component[2],
+            ]
+        )
+
+
+SUPPLIER_GENERATORS = {
+    "Mouser": mouser_generator,
+    "TME": mouser_generator,
+    "Lab": lab_generator,
+}
 
 
 def add_subparser(parser: argparse.ArgumentParser):
@@ -116,6 +140,12 @@ def add_subparser(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "-g", "--generate", dest="suppliers", choices=SUPPLIERS, nargs="+"
+    )
+    parser.add_argument(
+        "--no-mpn",
+        dest="no_mpn",
+        action="store_true",
+        help="Override ignoring components without mpn for bom generation",
     )
     parser.set_defaults(func=run)
 
@@ -216,7 +246,7 @@ class BOM:
         process.wait()
 
     def parse_xml(self):
-        print(f"Parsing the XML BOM")
+        print("Parsing the XML BOM")
         tree = ET.parse(TEMPFILE_NAME)
         root = tree.getroot()
         components = root.find("components")
@@ -231,9 +261,22 @@ class BOM:
                 value = ""
             properties = component.findall("property")
             mpn = self.find_property(properties, "MPN")
+
             suppliers = {}
             for supplier in SUPPLIERS:
                 suppliers[supplier] = self.find_property(properties, supplier)
+
+            if mpn is None and self.args.no_mpn:
+                prefix = "".join(char for char in ref if not char.isdigit())
+                mpn = f"{prefix}_{value}"
+                suppliers["Lab"] = mpn
+
+            if mpn == "NO_MPN" and self.args.no_mpn:
+                mpn = value
+                suppliers["Lab"] = mpn
+
+            if len(suppliers.keys()) == 0 and self.args.no_mpn:
+                suppliers["Lab"] = mpn
 
             self.components.append(Component(ref, value, mpn, suppliers))
 
@@ -247,7 +290,7 @@ class BOM:
         print("Veryfing components")
         for component in self.components:
             prefix = "".join(char for char in component.reference if not char.isdigit())
-            if not (prefix in ["C", "R", "TP"]):
+            if prefix not in ["C", "R", "TP"]:
                 # Check if component has MPN
                 if component.mpn is None:
                     self.error(f"Component without MPN: {component.reference}")
@@ -259,20 +302,26 @@ class BOM:
                 ):
                     self.error(f"No supplier specified for: {component.reference}")
 
-    def debunch_components(self):
+    def debunch_components(self) -> None:
         debunched_components = []
         for component in self.components:
             if component.mpn is None:
                 continue
-            if component.suppliers is not None: #this part handles + in MPN and SKU
+            if component.suppliers is not None:  # this part handles + in MPN and SKU
                 for supplier_name in component.suppliers.keys():
                     if component.suppliers[supplier_name] is not None:
-                        component.mpn = "".join(component.mpn.split()) #remove whitespace
-                        component.suppliers[supplier_name] = "".join(component.suppliers[supplier_name].split())
-                        mpns = component.mpn.split('+')
-                        skus = component.suppliers[supplier_name].split('+')
+                        component.mpn = "".join(
+                            component.mpn.split()
+                        )  # remove whitespace
+                        component.suppliers[supplier_name] = "".join(
+                            component.suppliers[supplier_name].split()
+                        )
+                        mpns = component.mpn.split("+")
+                        skus = component.suppliers[supplier_name].split("+")
                         if len(skus) != len(mpns):
-                            self.error(f'element count in SKU and MPN not equal for {component.mpn}')
+                            self.error(
+                                f"element count in SKU and MPN not equal for {component.mpn}"
+                            )
                             continue
                         for i in range(len(mpns)):
                             debunched_components.append(copy.deepcopy(component))
@@ -280,8 +329,7 @@ class BOM:
                             debunched_components[-1].suppliers[supplier_name] = skus[i]
         self.components = debunched_components
 
-
-    def group_components(self):
+    def group_components(self) -> None:
         print("Grouping components")
         for component in self.components:
             if component.mpn is None:
@@ -291,16 +339,16 @@ class BOM:
                 self.grouped_components[component.mpn] = ComponentGroup(
                     component.suppliers
                 )
-                #print("ddd",component.suppliers)
+                # print("ddd",component.suppliers)
             else:
                 self.grouped_components[component.mpn].count += 1
                 self.grouped_components[component.mpn].fill_suppliers(
                     component.suppliers
                 )
-        #for grouped_component in self.grouped_components:
-            #print('X',self.grouped_components[grouped_component].suppliers)
+        # for grouped_component in self.grouped_components:
+        # print('X',self.grouped_components[grouped_component].suppliers)
 
-    def generate_csv_boms(self):
+    def generate_csv_boms(self) -> None:
         print("Generating CSV BOMS")
         pathlib.Path("bom").mkdir(parents=True, exist_ok=True)
         boms: dict[str, list[Tuple[str, str, int]]] = {"None": []}
@@ -308,7 +356,7 @@ class BOM:
             boms[supplier] = []
 
         for mpn, grouped_component in self.grouped_components.items():
-            #print('lk', grouped_component.suppliers)
+            # print('lk', grouped_component.suppliers)
             if mpn != "NO_MPN":
                 supplier = "None"
                 for sup in self.args.suppliers:
@@ -319,7 +367,7 @@ class BOM:
                 sku = (
                     grouped_component.suppliers[supplier] if supplier != "None" else ""
                 )
-                if sku is not None:
+                if sku is not None or (self.args.no_mpn and supplier == "Lab"):
                     entry = (
                         mpn,
                         sku,
