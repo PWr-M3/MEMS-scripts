@@ -3,7 +3,7 @@ import os
 import sys
 import subprocess
 import xml.etree.ElementTree as ET
-from typing import Tuple
+from typing import Tuple, List, Dict
 import pathlib
 import csv
 import copy
@@ -13,10 +13,37 @@ import time
 from mems import utils
 
 TEMPFILE_NAME = "temp.xml"
-SUPPLIERS = ["Mouser", "TME", "Lab"]
+SUPPLIERS = ["Mouser", "TME"]
 
 
-def mouser_generator(components, csvwriter):
+class Component:
+    def __init__(
+        self,
+        reference: str,
+        value: str | None,
+        mpn: str | None,
+        skus: dict[str, str],
+    ):
+        self.reference: str = reference
+        self.value: str | None = value
+        self.mpn: str | None = mpn
+        self.skus: dict[str, str] = skus
+
+
+class ComponentGroup:
+    def __init__(self, skus: dict[str, str]):
+        self.count: int = 1
+        self.skus: dict[str, str] = skus
+
+
+class BOMEntry:
+    def __init__(self, mpn, sku, quantity):
+        self.mpn = mpn
+        self.sku = sku
+        self.quantity = quantity
+
+
+def mouser_generator(components: list[BOMEntry], csvwriter):
     csvwriter.writerow(
         [
             "MPN",
@@ -29,26 +56,23 @@ def mouser_generator(components, csvwriter):
         ]
     )
     for component in components:
-        print(f"Searching Mouser for {component[1]}")
+        print(f"Searching Mouser for {component.sku}")
+        response = utils.search_mouser(component.sku)
+        while len(response["Errors"]) > 0:
+            time.sleep(2)
+            response = utils.search_mouser(component.sku)
 
-        for attempts in range(30):
-            response = utils.search_mouser(component[1])
-            if response["Errors"] == []:
-                break
-            elif response["Errors"][0]["Code"] == "TooManyRequests":
-                print(termcolor.colored("Max requests per minute reached, waiting", "white"))
-                time.sleep(2)
-        part = find_matching_part(response, component[1])
+        part = mouser_find_matching_part(response, component.sku)
         if part is not None:
             print("Found")
-            stock = get_availability(part, int(component[2]))
-            price = get_price(part, int(component[2]))
+            stock = mouser_get_availability(part)
+            price = mouser_get_price(part, component.quantity)
             if price is not None:
-                cost = price * int(component[2])
+                cost = price * int(component.quantity)
             else:
                 cost = None
 
-            if stock is not None and stock >= int(component[2]):
+            if stock is not None and stock >= int(component.quantity):
                 available = True
             else:
                 print(termcolor.colored("Error: Not enough in stock", "red"))
@@ -56,9 +80,9 @@ def mouser_generator(components, csvwriter):
 
             csvwriter.writerow(
                 [
-                    component[0],
-                    component[1],
-                    component[2],
+                    component.mpn,
+                    component.sku,
+                    component.quantity,
                     price,
                     cost,
                     stock,
@@ -69,34 +93,28 @@ def mouser_generator(components, csvwriter):
             print(termcolor.colored("Error: Not found", "red"))
 
 
-def find_matching_part(response, sku):
-    return next(
-        (
-            part
-            for part in response["SearchResults"]["Parts"]
-            if "MouserPartNumber" in part and part["MouserPartNumber"].strip() == sku.strip()
-        ),
-        None,
-    )
+def mouser_find_matching_part(response, sku):
+    for part in response["SearchResults"]["Parts"]:
+        if "MouserPartNumber" in part and part["MouserPartNumber"].strip() == sku.strip():
+            return part
+    return None
 
 
-def get_availability(part, count):
+def mouser_get_availability(part):
     if "AvailabilityInStock" in part and part["AvailabilityInStock"] is not None:
         return int(part["AvailabilityInStock"])
-    else:
-        return None
+    return None
 
 
-def get_price(part, count):
+def mouser_get_price(part, count):
     price_breaks = part["PriceBreaks"]
     for price in price_breaks:
         if int(price["Quantity"]) <= count:
             return float(price["Price"].split()[0].replace(",", "."))
-    else:
-        return None
+    return None
 
 
-def lab_generator(components, csvwriter):
+def lab_generator(components: list[BOMEntry], csvwriter):
     csvwriter.writerow(
         [
             "Name",
@@ -106,8 +124,8 @@ def lab_generator(components, csvwriter):
     for component in components:
         csvwriter.writerow(
             [
-                component[0],
-                component[2],
+                component.mpn,
+                component.quantity,
             ]
         )
 
@@ -133,7 +151,7 @@ def add_subparser(parser: argparse.ArgumentParser):
         dest="path",
         help="Specifies path to main schematic file",
     )
-    parser.add_argument("-g", "--generate", dest="suppliers", choices=SUPPLIERS, nargs="+")
+    parser.add_argument("-g", "--generate", dest="suppliers", choices=SUPPLIERS, nargs="*")
     parser.add_argument(
         "--no-mpn",
         dest="no_mpn",
@@ -147,33 +165,8 @@ def run(args):
     BOM(args).run()
 
 
-class Component:
-    def __init__(
-        self,
-        reference: str,
-        value: str,
-        mpn: str | None,
-        suppliers: dict[str, str | None],
-    ):
-        self.reference: str = reference
-        self.value: str = value
-        self.mpn: str | None = mpn
-        self.suppliers: dict[str, str | None] = suppliers
-
-
-class ComponentGroup:
-    def __init__(self, suppliers: dict[str, str | None]):
-        self.count: int = 1
-        self.suppliers: dict[str, str | None] = suppliers
-
-    def fill_suppliers(self, suppliers):
-        for supplier in SUPPLIERS:
-            if self.suppliers[supplier] is None and suppliers[supplier] is not None:
-                self.suppliers[supplier] = suppliers[supplier]
-
-
 class BOM:
-    def __init__(self, args):
+    def __init__(self, args) -> None:
         self.args = args
         self.path = self.get_path()
         self.components: list[Component] = []
@@ -184,12 +177,17 @@ class BOM:
         colorama.just_fix_windows_console()
 
         self.generate_xml_bom()
-        self.parse_xml()
-        self.verify_components()
-        self.debunch_components()
-        self.group_components()
+        components = self.parse_xml()
+        self.verify_components(components)
+        components = self.handle_multipart_components(components)
+        components = self.handle_misc_components(components)
+        grouped_components = self.group_components(components)
+
+        suppliers = ["Lab"]
         if self.args.suppliers is not None:
-            self.generate_csv_boms()
+            suppliers += self.args.suppliers
+            self.generate_csv_boms(grouped_components, suppliers)
+
         self.remove_temp_xml()
         if self.has_errored:
             sys.exit(termcolor.colored("There were issues found", "red"))
@@ -219,7 +217,7 @@ class BOM:
         return path
 
     def generate_xml_bom(self):
-        print(f"Generating BOM using kicad-cli")
+        print("Generating BOM using kicad-cli")
         process = subprocess.Popen(
             [
                 "kicad-cli",
@@ -240,34 +238,29 @@ class BOM:
         root = tree.getroot()
         components = root.find("components")
         if components is None:
-            return
+            return []
+
+        output_components = []
         for component in components:
             ref = component.attrib["ref"]
             value_element = component.find("value")
             if value_element is not None and value_element.text is not None:
                 value = value_element.text
             else:
-                value = ""
+                value = None
+
             properties = component.findall("property")
             mpn = self.find_property(properties, "MPN")
 
-            suppliers = {}
+            skus = {}
             for supplier in SUPPLIERS:
-                suppliers[supplier] = self.find_property(properties, supplier)
+                supplier_sku = self.find_property(properties, supplier)
+                if supplier_sku is not None:
+                    skus[supplier] = supplier_sku
 
-            if mpn is None and self.args.no_mpn:
-                prefix = "".join(char for char in ref if not char.isdigit())
-                mpn = f"{prefix}_{value}"
-                suppliers["Lab"] = mpn
+            output_components.append(Component(ref, value, mpn, skus))
 
-            if mpn == "NO_MPN" and self.args.no_mpn:
-                mpn = value
-                suppliers["Lab"] = mpn
-
-            if len(suppliers.keys()) == 0 and self.args.no_mpn:
-                suppliers["Lab"] = mpn
-
-            self.components.append(Component(ref, value, mpn, suppliers))
+        return output_components
 
     def find_property(self, properties, name: str):
         for prop in properties:
@@ -275,86 +268,113 @@ class BOM:
                 return str(prop.attrib["value"])
         return None
 
-    def verify_components(self):
+    def verify_components(self, components: List[Component]):
         print("Veryfing components")
-        for component in self.components:
+        for component in components:
             prefix = "".join(char for char in component.reference if not char.isdigit())
-            if prefix not in ["C", "R", "TP"]:
-                # Check if component has MPN
-                if component.mpn is None:
-                    self.error(f"Component without MPN: {component.reference}")
+            # Check if component doen't have mpn and is not excluded from having one mandatory
+            if component.mpn is None and prefix not in ["C", "R", "TP"]:
+                self.error(f"Component without MPN: {component.reference}")
 
-                # Check if component has any supplier
-                if all(val is None for val in component.suppliers.values()) and component.mpn != "NO_MPN":
-                    self.error(f"No supplier specified for: {component.reference}")
+            # Check if component doesn't have SKU while having real MPN
+            if (
+                component.mpn is not None
+                and component.mpn != "NO_MPN"
+                and all(val is None for val in component.skus.values())
+            ):
+                self.error(f"No SKU specified for: {component.reference}")
 
-    def debunch_components(self) -> None:
-        debunched_components = []
-        for component in self.components:
+    def handle_multipart_components(self, components: List[Component]) -> List[Component]:
+        out_components: List[Component] = []
+        for component in components:
             if component.mpn is None:
+                out_components.append(component)
                 continue
-            if component.suppliers is not None:  # this part handles + in MPN and SKU
-                for supplier_name in component.suppliers.keys():
-                    if component.suppliers[supplier_name] is not None:
-                        component.mpn = "".join(component.mpn.split())  # remove whitespace
-                        component.suppliers[supplier_name] = "".join(component.suppliers[supplier_name].split())
-                        mpns = component.mpn.split("+")
-                        skus = component.suppliers[supplier_name].split("+")
-                        if len(skus) != len(mpns):
-                            self.error(f"element count in SKU and MPN not equal for {component.mpn}")
-                            continue
-                        for i in range(len(mpns)):
-                            debunched_components.append(copy.deepcopy(component))
-                            debunched_components[-1].mpn = mpns[i]
-                            debunched_components[-1].suppliers[supplier_name] = skus[i]
-        self.components = debunched_components
 
-    def group_components(self) -> None:
+            mpns = component.mpn.strip().split("+")
+            if len(mpns) == 1:
+                out_components.append(component)
+                continue
+
+            skus: List[Tuple[str, str]] = []
+            for supplier, supplier_skus in component.skus.items():
+                for sku in supplier_skus.strip().split("+"):
+                    skus.append((supplier, sku))
+
+            if len(skus) != len(mpns):
+                self.error(f"Element count in SKU and MPN not equal for {component.mpn}. Ignoring this component")
+                continue
+
+            for index, (supplier, sku) in enumerate(skus):
+                new_component = copy.deepcopy(component)
+                new_component.mpn = f"Multipart {index+1}/{len(skus)}: {mpns}"
+                new_component.skus = {supplier: sku}
+
+                out_components.append(new_component)
+                print(new_component.mpn, new_component.skus)
+
+        return out_components
+
+    def handle_misc_components(self, components: List[Component]) -> List[Component]:
+        for component in components:
+            if component.mpn is None:
+                prefix = "".join(char for char in component.reference if not char.isdigit())
+                if component.value is not None:
+                    component.mpn = prefix + component.value
+                    component.skus["Lab"] = component.mpn
+                else:
+                    component.mpn = "MissingMPNandValue"
+                    self.error("Component missing mpn and value")
+        return components
+
+    def group_components(self, components: List[Component]) -> Dict[str, ComponentGroup]:
         print("Grouping components")
-        for component in self.components:
+        grouped_components = {}
+        for component in components:
             if component.mpn is None:
+                self.error("Component without MPN where all components should already have MPN's (programming bug)")
                 continue
 
-            if component.mpn not in self.grouped_components:
-                self.grouped_components[component.mpn] = ComponentGroup(component.suppliers)
-                # print("ddd",component.suppliers)
+            if component.mpn not in grouped_components:
+                grouped_components[component.mpn] = ComponentGroup(component.skus)
             else:
-                self.grouped_components[component.mpn].count += 1
-                self.grouped_components[component.mpn].fill_suppliers(component.suppliers)
-        # for grouped_component in self.grouped_components:
-        # print('X',self.grouped_components[grouped_component].suppliers)
+                grouped_components[component.mpn].count += 1
 
-    def generate_csv_boms(self) -> None:
+        return grouped_components
+
+    def generate_csv_boms(self, grouped_components: Dict[str, ComponentGroup], suppliers: List[str]) -> None:
         print("Generating CSV BOMS")
         pathlib.Path("bom").mkdir(parents=True, exist_ok=True)
-        boms: dict[str, list[Tuple[str, str, int]]] = {"None": []}
-        for supplier in self.args.suppliers:
+
+        boms: dict[str, list[BOMEntry]] = {}
+        for supplier in suppliers:
             boms[supplier] = []
 
-        for mpn, grouped_component in self.grouped_components.items():
-            # print('lk', grouped_component.suppliers)
+        no_supplier_mpns: List[str] = []
+
+        for mpn, grouped_component in grouped_components.items():
             if mpn != "NO_MPN":
-                supplier = "None"
-                for sup in self.args.suppliers:
-                    if grouped_component.suppliers[sup] is not None:
+                sup: str | None = None
+                for sup in suppliers:
+                    if sup in grouped_component.skus and grouped_component.skus[sup] is not None:
                         supplier = sup
                         break
 
-                sku = grouped_component.suppliers[supplier] if supplier != "None" else ""
-                if sku is not None or (self.args.no_mpn and supplier == "Lab"):
-                    entry = (
+                if sup is not None:
+                    entry = BOMEntry(
                         mpn,
-                        sku,
+                        grouped_component.skus[sup],
                         grouped_component.count,
                     )
-                    boms[supplier].append(entry)
 
-        if len(boms["None"]) > 0:
-            self.error(
-                f"There were {str(len(boms['None']))} components without supplier ({[bom[0] for bom in boms['None']]})"
-            )
+                    boms[sup].append(entry)
+                else:
+                    no_supplier_mpns.append(mpn)
 
-        for supplier in self.args.suppliers:
+        if len(no_supplier_mpns) > 0:
+            self.error(f"There were {str(len(no_supplier_mpns))} components without supplier ({no_supplier_mpns})")
+
+        for supplier in suppliers:
             with open((pathlib.Path("bom") / (supplier + ".csv")), "w+", newline="") as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=";", quotechar='"')
                 SUPPLIER_GENERATORS[supplier](boms[supplier], csvwriter)

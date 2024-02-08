@@ -23,6 +23,8 @@ def add_subparser(parser: argparse.ArgumentParser):
         "-s",
         "--spare",
         dest="spare",
+        type=int,
+        default=0,
         help="Number of spare components to add to every entry",
     )
     parser.set_defaults(func=run)
@@ -32,7 +34,7 @@ class Consolidate:
     def __init__(self, args):
         self.args = args
         self.file_list = self.get_file_list()
-        self.spare = self.get_spares_count()
+        self.spare = args.spare
         self.has_errored = False
         self.bom = {}
 
@@ -83,42 +85,11 @@ class Consolidate:
                     self.bom[sku]["quantity"] += int(quantity * multiplier)
                     self.bom[sku]["board_needs"] += f", {path} ({quantity}x{multiplier})"
 
-    def get_file_list(self):
-        path = utils.get_main_sch()
-        if os.path.exists(path) and self.args.path is None:
-            pass
-        elif not os.path.exists(path) and self.args.path is None:
-            sys.exit(
-                termcolor.colored(
-                    f"Error: Default filename doesn't exist ({path}) and alternative wasn't specified",
-                    "red",
-                )
-            )
-        elif self.args.path is not None and not os.path.exists(self.args.path):
-            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.path}", "red"))
-        else:
-            path = self.args.path
-            data = []
-            try:
-                with open(path, "r") as file:
-                    reader = csv.reader(file, delimiter=";")  # attempt semicolon separated
-                    for row in reader:
-                        a = row[1]
-                        data.append(row)
-            except IndexError:
-                with open(path, "r") as file:
-                    reader = csv.reader(file, delimiter=",")  # attempt comma separated
-                    for row in reader:
-                        a = row[1]
-                        data.append(row)
-
-        return data
-
     def generate_csv_bom(self):
         list_csv = [["MPN", "SKU", "Quantity", "Price [zł/unit]", "Price [zł]", "In stock", "Available", "Needed for"]]
         for part in self.bom.keys():
+            price = 0
             try:
-                print(self.bom[part]["price"], self.bom[part]["quantity"])
                 price = float(self.bom[part]["price"]) * (self.spare + self.bom[part]["quantity"])
 
             except ValueError:
@@ -162,15 +133,6 @@ class Consolidate:
                 for row in reader:
                     data.append(row)
         return data
-
-    def get_spares_count(self):
-        spare = self.args.spare
-        try:
-            return int(spare)
-        except ValueError:
-            return 0
-        except TypeError:
-            return 0
 
     def error(self, text):
         print(termcolor.colored("Error: " + text, "red"))

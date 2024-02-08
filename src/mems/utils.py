@@ -17,15 +17,15 @@ def get_main_sch():
 def get_config():
     file_path = os.path.realpath(__file__)
     dir_path = pathlib.Path(file_path).parent
-    config_path = dir_path / "config.json"
+    config_path = dir_path.parent.parent / "config.json"
     if os.path.exists(config_path):
         with open(config_path) as fp:
             try:
                 j = json.load(fp)
             except:
-                sys.exit(termcolor.colored(f"Error: Couldn't parse config file", "red"))
+                sys.exit(termcolor.colored("Error: Couldn't parse config file", "red"))
     else:
-        sys.exit(termcolor.colored(f"Error: Config file doesn't exist", "red"))
+        sys.exit(termcolor.colored("Error: Config file doesn't exist", "red"))
 
     return j
 
@@ -47,5 +47,5 @@ def get_api_key():
     config = get_config()
     if "api_key" in config.keys():
         return config["api_key"]
-    else:
-        sys.exit(termcolor.colored(f'Error: No "api_key" found in config', "red"))
+
+    sys.exit(termcolor.colored('Error: No "api_key" found in config', "red"))

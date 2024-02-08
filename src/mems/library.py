@@ -6,16 +6,14 @@ import colorama
 import termcolor
 import kiutils.symbol
 import kiutils.items
+import kiutils.items.common
 import time
 
 from mems import utils
 
 
 def add_subparser(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "path",
-        help="Specifies path to symbol library file",
-    )
+    parser.add_argument("path", help="Specifies path to symbol library file")
     parser.add_argument(
         "-f",
         "--fill-in",
@@ -98,12 +96,13 @@ class Library:
 
                 if mouser is not None:
                     mouser.value = mouser.value.strip()
-                    for attempts in range(30):
+                    result = None
+                    while result is None:
                         result = utils.search_mouser(mouser.value)
                         if result["Errors"] == []:
                             break
-                        elif result["Errors"][0]["Code"] == "TooManyRequests":
-                            print(termcolor.colored(f"Max requests per minute reached, waiting", "white"))
+                        if result["Errors"][0]["Code"] == "TooManyRequests":
+                            print(termcolor.colored("Max requests per minute reached, waiting", "white"))
                             time.sleep(2)
 
                     part = self.find_matching_part(result, "MouserPartNumber", mouser.value)
@@ -132,12 +131,12 @@ class Library:
                     continue
 
                 self.set_property(symbol, "MPN", part["ManufacturerPartNumber"])
-                self.find_property(symbol, "MPN").effects.hide = True
+                self.find_property(symbol, "MPN").effects.hide = True  # type: ignore Just created so must exist
                 self.set_property(symbol, "Mouser", part["MouserPartNumber"])
-                self.find_property(symbol, "Mouser").effects.hide = True
+                self.find_property(symbol, "Mouser").effects.hide = True  # type: ignore Just created so must exist
                 self.set_property(symbol, "ki_description", part["Description"])
                 self.set_property(symbol, "Datasheet", part["DataSheetUrl"])
-                self.find_property(symbol, "Datasheet").effects.hide = True
+                self.find_property(symbol, "Datasheet").effects.hide = True  # type: ignore Just created so must exist
 
     def find_property(self, symbol, name):
         return next((prop for prop in symbol.properties if prop.key == name), None)
