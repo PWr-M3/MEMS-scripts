@@ -1,19 +1,15 @@
 import argparse
 import os
 import sys
-from typing import Tuple
-import pathlib
-import json
 
 import colorama
 import termcolor
 import kiutils.symbol
 import kiutils.items
-import requests
-import warnings
 import time
 
-import utils
+from mems import utils
+
 
 def add_subparser(parser: argparse.ArgumentParser):
     parser.add_argument(
@@ -67,11 +63,7 @@ class Library:
 
     def get_path(self):
         if self.args.path is not None and not os.path.exists(self.args.path):
-            sys.exit(
-                termcolor.colored(
-                    f"Error: Specified filename isn't correct ({self.args.path})", "red"
-                )
-            )
+            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.path})", "red"))
         else:
             path = self.args.path
         return path
@@ -87,11 +79,11 @@ class Library:
                 reference = self.find_property(symbol, "Reference")
                 datasheet = self.find_property(symbol, "Datasheet")
 
-                if reference == "#PWR": #ignore power symbols
+                if reference == "#PWR":  # ignore power symbols
                     continue
 
                 if self.args.verbose:
-                        print(symbol.entryName)
+                    print(symbol.entryName)
 
                 no_missing_values = True
                 for test in [datasheet, mpn, mouser]:
@@ -104,44 +96,40 @@ class Library:
                 if no_missing_values:
                     continue
 
-
                 if mouser is not None:
                     mouser.value = mouser.value.strip()
                     for attempts in range(30):
                         result = utils.search_mouser(mouser.value)
-                        if result['Errors'] == []:
+                        if result["Errors"] == []:
                             break
-                        elif result['Errors'][0]['Code'] == 'TooManyRequests':
+                        elif result["Errors"][0]["Code"] == "TooManyRequests":
                             print(termcolor.colored(f"Max requests per minute reached, waiting", "white"))
                             time.sleep(2)
 
-
-
-
-                    part = self.find_matching_part(
-                        result, "MouserPartNumber", mouser.value
-                    )
+                    part = self.find_matching_part(result, "MouserPartNumber", mouser.value)
                     if part is None:
                         if not tme:
-                            print(termcolor.colored(f"{symbol.entryName}: Mouser ID \"{mouser.value}\" not found on Mouser!", "red"))
+                            print(
+                                termcolor.colored(
+                                    f'{symbol.entryName}: Mouser ID "{mouser.value}" not found on Mouser!', "red"
+                                )
+                            )
                         continue
                 elif mpn is not None:
                     mpn.value = mpn.value.strip()
                     if mpn.value == "NO_MPN":
                         continue
                     result = utils.search_mouser(mpn.value)
-                    part = self.find_matching_part(
-                        result, "ManufacturerPartNumber", mpn.value
-                    )
+                    part = self.find_matching_part(result, "ManufacturerPartNumber", mpn.value)
                     if part is None:
                         if not tme:
-                            print(termcolor.colored(f"{symbol.entryName}: MPN \"{mpn.value}\" not found on Mouser!", "red"))
+                            print(
+                                termcolor.colored(f'{symbol.entryName}: MPN "{mpn.value}" not found on Mouser!', "red")
+                            )
                         continue
                 else:
                     print(termcolor.colored(f"{symbol.entryName}: Both MPN and Mouser fields missing!", "red"))
                     continue
-
-
 
                 self.set_property(symbol, "MPN", part["ManufacturerPartNumber"])
                 self.find_property(symbol, "MPN").effects.hide = True
@@ -165,7 +153,6 @@ class Library:
                     if self.args.verbose:
                         print(termcolor.colored(f"SETTING {name} to {value}", "green"))
 
-
         if not done:
             new = kiutils.items.common.Property(key=name, value=value)
             new.effects = kiutils.items.common.Effects()
@@ -174,11 +161,7 @@ class Library:
     def find_matching_part(self, response, key, value):
         try:
             return next(
-                (
-                    part
-                    for part in response["SearchResults"]["Parts"]
-                    if key in part and part[key] == value
-                ),
+                (part for part in response["SearchResults"]["Parts"] if key in part and part[key] == value),
                 None,
             )
         except TypeError:

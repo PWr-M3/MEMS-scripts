@@ -10,7 +10,7 @@ import copy
 import colorama
 import termcolor
 import time
-import utils
+from mems import utils
 
 TEMPFILE_NAME = "temp.xml"
 SUPPLIERS = ["Mouser", "TME", "Lab"]
@@ -36,11 +36,7 @@ def mouser_generator(components, csvwriter):
             if response["Errors"] == []:
                 break
             elif response["Errors"][0]["Code"] == "TooManyRequests":
-                print(
-                    termcolor.colored(
-                        "Max requests per minute reached, waiting", "white"
-                    )
-                )
+                print(termcolor.colored("Max requests per minute reached, waiting", "white"))
                 time.sleep(2)
         part = find_matching_part(response, component[1])
         if part is not None:
@@ -78,8 +74,7 @@ def find_matching_part(response, sku):
         (
             part
             for part in response["SearchResults"]["Parts"]
-            if "MouserPartNumber" in part
-            and part["MouserPartNumber"].strip() == sku.strip()
+            if "MouserPartNumber" in part and part["MouserPartNumber"].strip() == sku.strip()
         ),
         None,
     )
@@ -138,9 +133,7 @@ def add_subparser(parser: argparse.ArgumentParser):
         dest="path",
         help="Specifies path to main schematic file",
     )
-    parser.add_argument(
-        "-g", "--generate", dest="suppliers", choices=SUPPLIERS, nargs="+"
-    )
+    parser.add_argument("-g", "--generate", dest="suppliers", choices=SUPPLIERS, nargs="+")
     parser.add_argument(
         "--no-mpn",
         dest="no_mpn",
@@ -220,11 +213,7 @@ class BOM:
                 )
             )
         elif self.args.path is not None and not os.path.exists(self.args.path):
-            sys.exit(
-                termcolor.colored(
-                    f"Error: Specified filename isn't correct ({self.args.path}", "red"
-                )
-            )
+            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.path}", "red"))
         else:
             path = self.args.path
         return path
@@ -296,10 +285,7 @@ class BOM:
                     self.error(f"Component without MPN: {component.reference}")
 
                 # Check if component has any supplier
-                if (
-                    all(val is None for val in component.suppliers.values())
-                    and component.mpn != "NO_MPN"
-                ):
+                if all(val is None for val in component.suppliers.values()) and component.mpn != "NO_MPN":
                     self.error(f"No supplier specified for: {component.reference}")
 
     def debunch_components(self) -> None:
@@ -310,18 +296,12 @@ class BOM:
             if component.suppliers is not None:  # this part handles + in MPN and SKU
                 for supplier_name in component.suppliers.keys():
                     if component.suppliers[supplier_name] is not None:
-                        component.mpn = "".join(
-                            component.mpn.split()
-                        )  # remove whitespace
-                        component.suppliers[supplier_name] = "".join(
-                            component.suppliers[supplier_name].split()
-                        )
+                        component.mpn = "".join(component.mpn.split())  # remove whitespace
+                        component.suppliers[supplier_name] = "".join(component.suppliers[supplier_name].split())
                         mpns = component.mpn.split("+")
                         skus = component.suppliers[supplier_name].split("+")
                         if len(skus) != len(mpns):
-                            self.error(
-                                f"element count in SKU and MPN not equal for {component.mpn}"
-                            )
+                            self.error(f"element count in SKU and MPN not equal for {component.mpn}")
                             continue
                         for i in range(len(mpns)):
                             debunched_components.append(copy.deepcopy(component))
@@ -336,15 +316,11 @@ class BOM:
                 continue
 
             if component.mpn not in self.grouped_components:
-                self.grouped_components[component.mpn] = ComponentGroup(
-                    component.suppliers
-                )
+                self.grouped_components[component.mpn] = ComponentGroup(component.suppliers)
                 # print("ddd",component.suppliers)
             else:
                 self.grouped_components[component.mpn].count += 1
-                self.grouped_components[component.mpn].fill_suppliers(
-                    component.suppliers
-                )
+                self.grouped_components[component.mpn].fill_suppliers(component.suppliers)
         # for grouped_component in self.grouped_components:
         # print('X',self.grouped_components[grouped_component].suppliers)
 
@@ -364,9 +340,7 @@ class BOM:
                         supplier = sup
                         break
 
-                sku = (
-                    grouped_component.suppliers[supplier] if supplier != "None" else ""
-                )
+                sku = grouped_component.suppliers[supplier] if supplier != "None" else ""
                 if sku is not None or (self.args.no_mpn and supplier == "Lab"):
                     entry = (
                         mpn,
@@ -381,9 +355,7 @@ class BOM:
             )
 
         for supplier in self.args.suppliers:
-            with open(
-                (pathlib.Path("bom") / (supplier + ".csv")), "w+", newline=""
-            ) as csvfile:
+            with open((pathlib.Path("bom") / (supplier + ".csv")), "w+", newline="") as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=";", quotechar='"')
                 SUPPLIER_GENERATORS[supplier](boms[supplier], csvwriter)
 
