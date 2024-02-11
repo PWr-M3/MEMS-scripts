@@ -375,7 +375,7 @@ class BOM:
             self.error(f"There were {str(len(no_supplier_mpns))} components without supplier ({no_supplier_mpns})")
 
         for supplier in suppliers:
-            with open((pathlib.Path("bom") / (supplier + ".csv")), "w+", newline="") as csvfile:
+            with open((pathlib.Path("./bom") / (supplier + ".csv")), "w+", newline="") as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=";", quotechar='"')
                 SUPPLIER_GENERATORS[supplier](boms[supplier], csvwriter)
 
