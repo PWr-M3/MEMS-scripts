@@ -347,27 +347,27 @@ class BOM:
         pathlib.Path("bom").mkdir(parents=True, exist_ok=True)
 
         boms: dict[str, list[BOMEntry]] = {}
-        for supplier in suppliers:
-            boms[supplier] = []
+        for sup in suppliers:
+            boms[sup] = []
 
         no_supplier_mpns: List[str] = []
 
         for mpn, grouped_component in grouped_components.items():
             if mpn != "NO_MPN":
-                sup: str | None = None
+                supplier: str | None = None
                 for sup in suppliers:
                     if sup in grouped_component.skus and grouped_component.skus[sup] is not None:
                         supplier = sup
                         break
 
-                if sup is not None:
+                if supplier is not None:
                     entry = BOMEntry(
                         mpn,
-                        grouped_component.skus[sup],
+                        grouped_component.skus[supplier],
                         grouped_component.count,
                     )
 
-                    boms[sup].append(entry)
+                    boms[supplier].append(entry)
                 else:
                     no_supplier_mpns.append(mpn)
 
