@@ -44,6 +44,9 @@ def search_mouser(val):
 
 
 def get_api_key():
+    if "MOUSER_API_KEY" in os.environ:
+        return os.environ["MOUSER_API_KEY"]
+
     config = get_config()
     if "api_key" in config.keys():
         return config["api_key"]
