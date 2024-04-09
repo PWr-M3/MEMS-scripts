@@ -1,9 +1,14 @@
+from dataclasses import dataclass
 import os
 import pathlib
 import json
+import re
 import sys
+from typing import List
+
 import termcolor
 import requests
+from bs4 import BeautifulSoup
 
 
 def get_main_sch():
@@ -52,3 +57,54 @@ def get_api_key():
         return config["api_key"]
 
     sys.exit(termcolor.colored('Error: No "api_key" found in config', "red"))
+
+
+@dataclass
+class PriceRow:
+    moq: int
+    unit_price: float
+
+
+@dataclass
+class LCSCItem:
+    sku: str
+    in_stock_qty: int
+    prices: List[PriceRow]
+
+    def get_price(self, qty):
+        for row in self.prices:
+            if row.moq <= qty:
+                price = row.unit_price
+        return price
+
+
+def search_lcsc(sku):
+    r = requests.get(
+        "https://www.lcsc.com/search",
+        params={"q": sku},
+        headers={
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+            'Accept': 'text/html',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br'}
+    )
+    soup = BeautifulSoup(r.content, 'html.parser')
+
+    if "Search by " in soup.title.string:
+        return None
+
+    qty_in_stock = int(soup.find("div", string=re.compile("In Stock:.*")).text.split(":")[1].strip())
+    prices = list()
+    price_table = soup.find(string=re.compile("Qty.*")).find_parent("table").tbody
+    for row in price_table:
+        tds = row.find_all('td')
+        qty = int(re.findall('\d+', tds[0].string.strip())[0])
+        unit_price = float(re.findall('\d+\.\d+', tds[1].span.string.strip())[0])
+        prices.append(PriceRow(qty, unit_price))
+
+    return LCSCItem(sku, qty_in_stock, prices)
+
+
+if __name__ == "__main__":
+    # search_lcsc("C5252902")
+    search_lcsc("ala")

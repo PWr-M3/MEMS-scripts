@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABC
 import argparse
 import os
 import sys
@@ -13,16 +14,15 @@ import time
 from mems import utils
 
 TEMPFILE_NAME = "temp.xml"
-SUPPLIERS = ["Mouser", "TME"]
 
 
 class Component:
     def __init__(
-        self,
-        reference: str,
-        value: str | None,
-        mpn: str | None,
-        skus: dict[str, str],
+            self,
+            reference: str,
+            value: str | None,
+            mpn: str | None,
+            skus: dict[str, str],
     ):
         self.reference: str = reference
         self.value: str | None = value
@@ -42,41 +42,157 @@ class BOMEntry:
         self.sku = sku
         self.quantity = quantity
 
+    def __repr__(self):
+        return f"{self.quantity} pcs MPN: {self.mpn} SKU: {self.sku}"
 
-def mouser_generator(components: list[BOMEntry], csvwriter):
-    csvwriter.writerow(
-        [
-            "MPN",
-            "SKU",
-            "Quantity",
-            "Price [zł/unit]",
-            "Price [zł]",
-            "In stock",
-            "Available",
-        ]
-    )
-    for component in components:
-        print(f"Searching Mouser for {component.sku}")
-        response = utils.search_mouser(component.sku)
-        while len(response["Errors"]) > 0:
-            time.sleep(2)
+
+SUPPLIERS = {}
+
+
+class Supplier(ABC):
+    def __init_subclass__(cls, /, name, **kwargs):
+        super().__init_subclass__(**kwargs)
+        SUPPLIERS[name] = cls
+        cls.name = name
+
+    def __init__(self):
+        self.components: list[BOMEntry] = list()
+
+    def add_components(self, components: BOMEntry):
+        self.components.append(components)
+
+    @abstractmethod
+    def write_csv(self, csvwriter):
+        return
+
+
+class MouserSupplier(Supplier, name="Mouser"):
+    def write_csv(self, csvwriter):
+        csvwriter.writerow(
+            [
+                "MPN",
+                "SKU",
+                "Quantity",
+                "Price [zł/unit]",
+                "Price [zł]",
+                "In stock",
+                "Available",
+            ]
+        )
+        for component in self.components:
+            print(f"Searching Mouser for {component.sku}")
             response = utils.search_mouser(component.sku)
+            while len(response["Errors"]) > 0:
+                time.sleep(2)
+                response = utils.search_mouser(component.sku)
 
-        part = mouser_find_matching_part(response, component.sku)
-        if part is not None:
+            part = self.find_matching_part(response, component.sku)
+            if part is not None:
+                print("Found")
+                stock = self.get_availability(part)
+                price = self.mouser_get_price(part, component.quantity)
+                if price is not None:
+                    cost = price * int(component.quantity)
+                else:
+                    cost = None
+
+                if stock is not None and stock >= int(component.quantity):
+                    available = True
+                else:
+                    print(termcolor.colored("Error: Not enough in stock", "red"))
+                    available = False
+
+                csvwriter.writerow(
+                    [
+                        component.mpn,
+                        component.sku,
+                        component.quantity,
+                        price,
+                        cost,
+                        stock,
+                        available,
+                    ]
+                )
+            else:
+                print(termcolor.colored("Error: Not found", "red"))
+
+    @staticmethod
+    def find_matching_part(response, sku):
+        for part in response["SearchResults"]["Parts"]:
+            if "MouserPartNumber" in part and part["MouserPartNumber"].strip() == sku.strip():
+                return part
+        return None
+
+    @staticmethod
+    def get_availability(part):
+        if "AvailabilityInStock" in part and part["AvailabilityInStock"] is not None:
+            return int(part["AvailabilityInStock"])
+        return None
+
+    @staticmethod
+    def mouser_get_price(part, count):
+        price_breaks = part["PriceBreaks"]
+        for price in price_breaks:
+            if int(price["Quantity"]) <= count:
+                return float(price["Price"].split()[0].replace(",", "."))
+        return None
+
+
+class LabSupplier(Supplier, name="Lab"):
+    def write_csv(self, csvwriter):
+        csvwriter.writerow(
+            [
+                "Name",
+                "Quantity",
+            ]
+        )
+        for component in self.components:
+            csvwriter.writerow(
+                [
+                    component.mpn,
+                    component.quantity,
+                ]
+            )
+
+
+class TMESupplier(Supplier, name="TME"):
+    def write_csv(self, csvwriter):
+
+        for component in self.components:
+            csvwriter.writerow(
+                [
+                    component.sku,
+                    component.quantity,
+                ]
+            )
+
+
+class LCSCSupplier(Supplier, name="LCSC"):
+    def write_csv(self, csvwriter):
+        csvwriter.writerow(
+            [
+                "MPN",
+                "SKU",
+                "Quantity",
+                "Price [USD/unit]",
+                "Price [USD]",
+                "In stock",
+                "Available",
+            ]
+        )
+        for component in self.components:
+            print(f"Searching LCSC for {component.sku}")
+            part = utils.search_lcsc(component.sku)
+            if part is None:
+                print(termcolor.colored("Error: Not found", "red"))
+                continue
+
             print("Found")
-            stock = mouser_get_availability(part)
-            price = mouser_get_price(part, component.quantity)
-            if price is not None:
-                cost = price * int(component.quantity)
-            else:
-                cost = None
-
-            if stock is not None and stock >= int(component.quantity):
-                available = True
-            else:
+            price = part.get_price(component.quantity)
+            cost = price * component.quantity
+            available = part.in_stock_qty >= component.quantity
+            if not available:
                 print(termcolor.colored("Error: Not enough in stock", "red"))
-                available = False
 
             csvwriter.writerow(
                 [
@@ -85,56 +201,11 @@ def mouser_generator(components: list[BOMEntry], csvwriter):
                     component.quantity,
                     price,
                     cost,
-                    stock,
+                    part.in_stock_qty,
                     available,
                 ]
             )
-        else:
-            print(termcolor.colored("Error: Not found", "red"))
 
-
-def mouser_find_matching_part(response, sku):
-    for part in response["SearchResults"]["Parts"]:
-        if "MouserPartNumber" in part and part["MouserPartNumber"].strip() == sku.strip():
-            return part
-    return None
-
-
-def mouser_get_availability(part):
-    if "AvailabilityInStock" in part and part["AvailabilityInStock"] is not None:
-        return int(part["AvailabilityInStock"])
-    return None
-
-
-def mouser_get_price(part, count):
-    price_breaks = part["PriceBreaks"]
-    for price in price_breaks:
-        if int(price["Quantity"]) <= count:
-            return float(price["Price"].split()[0].replace(",", "."))
-    return None
-
-
-def lab_generator(components: list[BOMEntry], csvwriter):
-    csvwriter.writerow(
-        [
-            "Name",
-            "Quantity",
-        ]
-    )
-    for component in components:
-        csvwriter.writerow(
-            [
-                component.mpn,
-                component.quantity,
-            ]
-        )
-
-
-SUPPLIER_GENERATORS = {
-    "Mouser": mouser_generator,
-    "TME": mouser_generator,
-    "Lab": lab_generator,
-}
 
 
 def add_subparser(parser: argparse.ArgumentParser):
@@ -272,15 +343,15 @@ class BOM:
         print("Veryfing components")
         for component in components:
             prefix = "".join(char for char in component.reference if not char.isdigit())
-            # Check if component doen't have mpn and is not excluded from having one mandatory
+            # Check if component doesn't have mpn and is not excluded from having one mandatory
             if component.mpn is None and prefix not in ["C", "R", "TP"]:
                 self.error(f"Component without MPN: {component.reference}")
 
             # Check if component doesn't have SKU while having real MPN
             if (
-                component.mpn is not None
-                and component.mpn != "NO_MPN"
-                and all(val is None for val in component.skus.values())
+                    component.mpn is not None
+                    and component.mpn != "NO_MPN"
+                    and all(val is None for val in component.skus.values())
             ):
                 self.error(f"No SKU specified for: {component.reference}")
 
@@ -307,7 +378,7 @@ class BOM:
 
             for index, (supplier, sku) in enumerate(skus):
                 new_component = copy.deepcopy(component)
-                new_component.mpn = f"Multipart {index+1}/{len(skus)}: {mpns}"
+                new_component.mpn = f"Multipart {index + 1}/{len(skus)}: {mpns}"
                 new_component.skus = {supplier: sku}
 
                 out_components.append(new_component)
@@ -346,10 +417,7 @@ class BOM:
         print("Generating CSV BOMS")
         pathlib.Path("bom").mkdir(parents=True, exist_ok=True)
 
-        boms: dict[str, list[BOMEntry]] = {}
-        for sup in suppliers:
-            boms[sup] = []
-
+        boms: Dict[str, Supplier] = {name: SUPPLIERS[name]() for name in suppliers}
         no_supplier_mpns: List[str] = []
 
         for mpn, grouped_component in grouped_components.items():
@@ -367,17 +435,17 @@ class BOM:
                         grouped_component.count,
                     )
 
-                    boms[supplier].append(entry)
+                    boms[supplier].add_components(entry)
                 else:
                     no_supplier_mpns.append(mpn)
 
         if len(no_supplier_mpns) > 0:
             self.error(f"There were {str(len(no_supplier_mpns))} components without supplier ({no_supplier_mpns})")
 
-        for supplier in suppliers:
-            with open((pathlib.Path("./bom") / (supplier + ".csv")), "w+", newline="") as csvfile:
+        for name, bom in boms.items():
+            with open((pathlib.Path("./bom") / (name + ".csv")), "w+", newline="") as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=";", quotechar='"')
-                SUPPLIER_GENERATORS[supplier](boms[supplier], csvwriter)
+                bom.write_csv(csvwriter)
 
     def remove_temp_xml(self):
         os.remove(TEMPFILE_NAME)
