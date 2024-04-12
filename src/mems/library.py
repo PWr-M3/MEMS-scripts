@@ -1,38 +1,57 @@
 import argparse
+import json
 import os
 import sys
+import time
+from pathlib import Path
 
 import colorama
-import termcolor
-import kiutils.symbol
+import git
 import kiutils.items
 import kiutils.items.common
-import time
+import kiutils.libraries
+import kiutils.symbol
+import termcolor
+import xdg.BaseDirectory
 
 from mems import utils
 
+URL = "git@github.com:PWr-M3/MEMSComponents.git"
+RESOURCE_NAME = "MEMSComponents"
+KICAD_RESOURCE_NAME = "kicad"
+SYMBOL_SHORTHAND = "MEMS_SYMBOLS"
+FOOTPRINT_SHORTHAND = "MEMS_FOOTPRINTS"
+MODEL_SHORTHAND = "MEMS_3DMODELS"
+
 
 def add_subparser(parser: argparse.ArgumentParser):
-    parser.add_argument("path", help="Specifies path to symbol library file")
-    parser.add_argument(
-        "-f",
-        "--fill-in",
-        dest="fill",
-        action="store_true",
-        help="Fills in missing fields in library",
-    )
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="subcommand")
+    fill_parser = subparsers.add_parser(name="fill", help="Fills in missing fields in library")
+    fill_parser.add_argument("path", help="Specifies path to symbol library file")
+    fill_parser.add_argument(
         "-v",
         "--verbose",
         dest="verbose",
         action="store_true",
         help="Verbose mode",
     )
+
+    install_parser = subparsers.add_parser(name="install", help="Installs library in specified directory")
+    install_parser.add_argument("path", type=Path)
+
+    _ = subparsers.add_parser(name="update", help="Updates library from git")
+
     parser.set_defaults(func=run)
 
 
 def run(args):
-    Library(args).run()
+    if args.subcommand == "fill":
+        Library(args).run()
+    if args.subcommand == "install":
+        install_lib(args.path)
+    if args.subcommand == "update":
+        # TODO: also update from git
+        configure_kicad()
 
 
 class Library:
@@ -164,9 +183,98 @@ class Library:
                 None,
             )
         except TypeError:
-            print(termcolor.colored(f"Empty response", "red"))
+            print(termcolor.colored("Empty response", "red"))
             print(response)
             return None
+
+
+def install_lib(path: Path):
+    path = path / "MEMSComponents"
+    if get_lib_path() is not None:
+        sys.exit("Library is already installed")
+
+    _ = git.Repo.clone_from(URL, path)
+    symlink_path = xdg.BaseDirectory.save_data_path(RESOURCE_NAME)
+    if not os.path.lexists(symlink_path):
+        os.symlink(path.resolve(), symlink_path, target_is_directory=True)
+
+    configure_kicad()
+
+
+def get_lib_path() -> Path | None:
+    paths = xdg.BaseDirectory.load_data_paths(RESOURCE_NAME)
+    try:
+        return Path(next(paths)).resolve()
+    except StopIteration:
+        return None
+
+
+def get_kicad_config_path() -> Path:
+    paths = xdg.BaseDirectory.load_config_paths(KICAD_RESOURCE_NAME)
+    try:
+        return Path(next(paths)).resolve()
+    except StopIteration:
+        sys.exit("Kicad config not found. Make sure you run it")
+
+
+def configure_kicad():
+    path = get_kicad_config_path()
+    for directory in path.iterdir():
+        setup_kicad_paths(directory / "kicad_common.json")
+        add_symbol_libs(directory / "sym-lib-table")
+        add_footprint_libs(directory / "fp-lib-table")
+
+
+def add_symbol_libs(sym_lib_path: Path):
+    sym_lib = kiutils.libraries.LibTable.from_file(str(sym_lib_path))
+    sym_lib.libs[:] = [lib for lib in sym_lib.libs if SYMBOL_SHORTHAND not in lib.uri]
+    lib_path = get_lib_path()
+    if lib_path is None:
+        sys.exit("Library is not installed")
+    for path in (lib_path / "symbols").iterdir():
+        if path.suffix == ".kicad_sym":
+            sym_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=f"${{{SYMBOL_SHORTHAND}}}/{path.name}"))
+    sym_lib.to_file()
+
+
+def add_footprint_libs(fp_lib_path: Path):
+    fp_lib = kiutils.libraries.LibTable.from_file(str(fp_lib_path))
+    fp_lib.libs[:] = [lib for lib in fp_lib.libs if FOOTPRINT_SHORTHAND not in lib.uri]
+    lib_path = get_lib_path()
+    if lib_path is None:
+        sys.exit("Library is not installed")
+    for path in (lib_path / "footprints").iterdir():
+        if path.suffix == ".kicad_mod":
+            fp_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=f"${{{FOOTPRINT_SHORTHAND}}}/{path.name}"))
+    fp_lib.to_file()
+
+
+def setup_kicad_paths(kicad_common_path: Path):
+    content = {}
+    try:
+        with open(kicad_common_path, "r") as f:
+            content = json.load(f)
+    except IOError as error:
+        sys.exit(f"Failed to read file: {kicad_common_path}. Error: {error}")
+    if "environment" not in content:
+        content["environment"] = {}
+    if "vars" not in content["environment"]:
+        content["environment"]["vars"] = {}
+    var = content["environment"]["vars"]
+
+    lib_path = get_lib_path()
+    if lib_path is None:
+        sys.exit("Library not installed")
+
+    var[SYMBOL_SHORTHAND] = str(lib_path / "symbols")
+    var[FOOTPRINT_SHORTHAND] = str(lib_path / "footprints")
+    var[MODEL_SHORTHAND] = str(lib_path / "3d_models")
+
+    try:
+        with open(kicad_common_path, "w") as f:
+            json.dump(content, f)
+    except IOError as error:
+        sys.exit(f"Failed to read file: {kicad_common_path}. Error: {error}")
 
 
 if __name__ == "__main__":
