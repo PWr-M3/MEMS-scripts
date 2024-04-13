@@ -24,6 +24,9 @@ FOOTPRINT_SHORTHAND = "MEMS_FOOTPRINTS"
 MODEL_SHORTHAND = "MEMS_3DMODELS"
 
 
+LIBRARY_NOT_INSTALLED_MSG = "Library is not installed. Run 'mems library install'."
+
+
 def add_subparser(parser: argparse.ArgumentParser):
     subparsers = parser.add_subparsers(dest="subcommand")
     fill_parser = subparsers.add_parser(name="fill", help="Fills in missing fields in library")
@@ -189,9 +192,12 @@ class Library:
 
 
 def install_lib(path: Path):
+    """Clones library repository, symlinks it to data_dir and configures kicad to use it."""
     path = path / "MEMSComponents"
     if get_lib_path() is not None:
-        sys.exit("Library is already installed")
+        sys.exit("Library is already installed (symlinked in data dircetory)")
+    if path.exists():
+        sys.exit("MEMSComponents already exists in passed directory")
 
     _ = git.Repo.clone_from(URL, path)
     symlink_path = Path(xdg.BaseDirectory.xdg_data_dirs[0]) / RESOURCE_NAME
@@ -202,6 +208,7 @@ def install_lib(path: Path):
 
 
 def get_lib_path() -> Path | None:
+    """Returns path to library in data directory or None if not found."""
     paths = xdg.BaseDirectory.load_data_paths(RESOURCE_NAME)
     try:
         return Path(next(paths)).resolve()
@@ -210,6 +217,7 @@ def get_lib_path() -> Path | None:
 
 
 def get_kicad_config_path() -> Path:
+    """Returns path to kicad config directory."""
     paths = xdg.BaseDirectory.load_config_paths(KICAD_RESOURCE_NAME)
     try:
         return Path(next(paths)).resolve()
@@ -218,6 +226,7 @@ def get_kicad_config_path() -> Path:
 
 
 def configure_kicad():
+    """Adds library to kicad config, or updates if already added."""
     path = get_kicad_config_path()
     for directory in path.iterdir():
         setup_kicad_paths(directory / "kicad_common.json")
@@ -275,6 +284,12 @@ def setup_kicad_paths(kicad_common_path: Path):
             json.dump(content, f)
     except IOError as error:
         sys.exit(f"Failed to read file: {kicad_common_path}. Error: {error}")
+
+
+def update_from_git():
+    lib_path = get_lib_path()
+    if lib_path is None:
+        sys.exit("Library is not installed. ")
 
 
 if __name__ == "__main__":
