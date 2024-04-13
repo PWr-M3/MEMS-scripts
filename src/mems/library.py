@@ -194,7 +194,7 @@ def install_lib(path: Path):
         sys.exit("Library is already installed")
 
     _ = git.Repo.clone_from(URL, path)
-    symlink_path = xdg.BaseDirectory.save_data_path(RESOURCE_NAME)
+    symlink_path = Path(xdg.BaseDirectory.xdg_data_dirs[0]) / RESOURCE_NAME
     if not os.path.lexists(symlink_path):
         os.symlink(path.resolve(), symlink_path, target_is_directory=True)
 
