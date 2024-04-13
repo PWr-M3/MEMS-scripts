@@ -5,10 +5,14 @@ import json
 import re
 import sys
 from typing import List
+import xdg.BaseDirectory
+from pathlib import Path
 
 import termcolor
 import requests
 from bs4 import BeautifulSoup
+
+RESOURCE_NAME = "MEMS-scripts"
 
 
 def get_main_sch():
@@ -17,6 +21,11 @@ def get_main_sch():
     sch = path / f"{path.stem}.kicad_sch"
     sch = sch.resolve()
     return str(sch)
+
+
+def get_data_dir() -> Path:
+    """Return directory where data is stored."""
+    return Path(xdg.BaseDirectory.save_data_path(RESOURCE_NAME))
 
 
 def get_config():
@@ -83,12 +92,13 @@ def search_lcsc(sku):
         "https://www.lcsc.com/search",
         params={"q": sku},
         headers={
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
-            'Accept': 'text/html',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br'}
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+            "Accept": "text/html",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+        },
     )
-    soup = BeautifulSoup(r.content, 'html.parser')
+    soup = BeautifulSoup(r.content, "html.parser")
 
     if "Search by " in soup.title.string:
         return None
@@ -97,9 +107,9 @@ def search_lcsc(sku):
     prices = list()
     price_table = soup.find(string=re.compile("Qty.*")).find_parent("table").tbody
     for row in price_table:
-        tds = row.find_all('td')
-        qty = int(re.findall('\d+', tds[0].string.strip())[0])
-        unit_price = float(re.findall('\d+\.\d+', tds[1].span.string.strip())[0])
+        tds = row.find_all("td")
+        qty = int(re.findall("\d+", tds[0].string.strip())[0])
+        unit_price = float(re.findall("\d+\.\d+", tds[1].span.string.strip())[0])
         prices.append(PriceRow(qty, unit_price))
 
     return LCSCItem(sku, qty_in_stock, prices)
