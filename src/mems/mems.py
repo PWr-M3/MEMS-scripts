@@ -26,7 +26,7 @@ def main():
 
     args = parser.parse_args()
 
-    sane_logging.SaneLogging().terminal(args.log_level).file(utils.get_data_dir() / "logs").apply(logger)
+    sane_logging.SaneLogging().terminal(args.log_level).file(utils.get_data_dir() / "logs").apply(logger.parent)
     logger.info("MEMS Scripts started")
 
     args.func(args)

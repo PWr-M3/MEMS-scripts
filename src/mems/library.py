@@ -16,13 +16,16 @@ import xdg.BaseDirectory
 
 from mems import utils
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 URL = "git@github.com:PWr-M3/MEMSComponents.git"
 RESOURCE_NAME = "MEMSComponents"
 KICAD_RESOURCE_NAME = "kicad"
 SYMBOL_SHORTHAND = "MEMS_SYMBOLS"
 FOOTPRINT_SHORTHAND = "MEMS_FOOTPRINTS"
 MODEL_SHORTHAND = "MEMS_3DMODELS"
-
 
 LIBRARY_NOT_INSTALLED_MSG = "Library is not installed. Run 'mems library install'."
 
@@ -47,13 +50,15 @@ def add_subparser(parser: argparse.ArgumentParser):
     parser.set_defaults(func=run)
 
 
-def run(args):
+def run(args: argparse.Namespace):
     if args.subcommand == "fill":
         Library(args).run()
     if args.subcommand == "install":
+        assert isinstance(args.path, Path)
         install_lib(args.path)
     if args.subcommand == "update":
-        # TODO: also update from git
+        logger.info("Running library update")
+        update_from_git()
         configure_kicad()
 
 
@@ -195,13 +200,17 @@ def install_lib(path: Path):
     """Clones library repository, symlinks it to data_dir and configures kicad to use it."""
     path = path / "MEMSComponents"
     if get_lib_path() is not None:
-        sys.exit("Library is already installed (symlinked in data dircetory)")
+        logger.error("Library is already installed (symlinked in data dircetory)")
+        sys.exit(1)
     if path.exists():
-        sys.exit("MEMSComponents already exists in passed directory")
+        logger.error("MEMSComponents already exists in passed directory")
+        sys.exit(1)
 
+    logger.info(f"Cloning library from {URL}")
     _ = git.Repo.clone_from(URL, path)
     symlink_path = Path(xdg.BaseDirectory.xdg_data_dirs[0]) / RESOURCE_NAME
     if not os.path.lexists(symlink_path):
+        logger.info(f"Symlinking library to: {symlink_path}")
         os.symlink(path.resolve(), symlink_path, target_is_directory=True)
 
     configure_kicad()
@@ -227,6 +236,7 @@ def get_kicad_config_path() -> Path:
 
 def configure_kicad():
     """Adds library to kicad config, or updates if already added."""
+    logger.info("Setting up kicad with library")
     path = get_kicad_config_path()
     for directory in path.iterdir():
         setup_kicad_paths(directory / "kicad_common.json")
@@ -235,6 +245,7 @@ def configure_kicad():
 
 
 def add_symbol_libs(sym_lib_path: Path):
+    logger.info("Loading symbol library table")
     sym_lib = kiutils.libraries.LibTable.from_file(str(sym_lib_path))
     sym_lib.libs[:] = [lib for lib in sym_lib.libs if SYMBOL_SHORTHAND not in lib.uri]
     lib_path = get_lib_path()
@@ -244,9 +255,11 @@ def add_symbol_libs(sym_lib_path: Path):
         if path.suffix == ".kicad_sym":
             sym_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=f"${{{SYMBOL_SHORTHAND}}}/{path.name}"))
     sym_lib.to_file()
+    logger.info("Symbol library table updated and saved")
 
 
 def add_footprint_libs(fp_lib_path: Path):
+    logger.info("Loading footprint library table")
     fp_lib = kiutils.libraries.LibTable.from_file(str(fp_lib_path))
     fp_lib.libs[:] = [lib for lib in fp_lib.libs if FOOTPRINT_SHORTHAND not in lib.uri]
     lib_path = get_lib_path()
@@ -256,15 +269,18 @@ def add_footprint_libs(fp_lib_path: Path):
         if path.suffix == ".kicad_mod":
             fp_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=f"${{{FOOTPRINT_SHORTHAND}}}/{path.name}"))
     fp_lib.to_file()
+    logger.info("Footprint library table updated and saved")
 
 
 def setup_kicad_paths(kicad_common_path: Path):
+    logger.info("Loading kicad_common.json config file")
     content = {}
     try:
         with open(kicad_common_path, "r") as f:
             content = json.load(f)
     except IOError as error:
-        sys.exit(f"Failed to read file: {kicad_common_path}. Error: {error}")
+        logger.error(f"Failed to read file: {kicad_common_path}. Error: {error}")
+        sys.exit(1)
     if "environment" not in content:
         content["environment"] = {}
     if "vars" not in content["environment"]:
@@ -273,7 +289,10 @@ def setup_kicad_paths(kicad_common_path: Path):
 
     lib_path = get_lib_path()
     if lib_path is None:
-        sys.exit("Library not installed")
+        logger.error(LIBRARY_NOT_INSTALLED_MSG)
+        sys.exit(1)
+
+    logger.info("Appending paths to config.")
 
     var[SYMBOL_SHORTHAND] = str(lib_path / "symbols")
     var[FOOTPRINT_SHORTHAND] = str(lib_path / "footprints")
@@ -283,13 +302,25 @@ def setup_kicad_paths(kicad_common_path: Path):
         with open(kicad_common_path, "w") as f:
             json.dump(content, f)
     except IOError as error:
-        sys.exit(f"Failed to read file: {kicad_common_path}. Error: {error}")
+        logger.error(f"Failed to read file: {kicad_common_path}. Error: {error}")
+        sys.exit(1)
+
+    logger.info("Changes saved to kicad_common.json")
 
 
 def update_from_git():
     lib_path = get_lib_path()
     if lib_path is None:
-        sys.exit("Library is not installed. ")
+        logger.error(LIBRARY_NOT_INSTALLED_MSG)
+        sys.exit(1)
+
+    repo = git.Repo(lib_path)
+    if repo.is_dirty(untracked_files=True):
+        logger.error("Repository is dirty. Aborting. Commit all changes.")
+        sys.exit(1)
+
+    logger.info("Pulling latest changes from origin.")
+    repo.remotes.origin.pull()
 
 
 if __name__ == "__main__":
