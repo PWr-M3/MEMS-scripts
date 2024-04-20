@@ -2,7 +2,8 @@ import argparse
 import logging
 import sane_logging
 
-from mems import bom, consolidate, library, utils
+from mems import bom, consolidate, utils
+from mems.library import library
 
 logger = logging.getLogger(__name__)
 
