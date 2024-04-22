@@ -182,25 +182,76 @@ SERIES: list[type[CapacitorSeries]] = [KemetC0G]
 
 def add_subparser(parser: argparse.ArgumentParser):
     parser.add_argument("-p", "--package", dest="package", type=str)
-    parser.add_argument("-c", "--capacitance", dest="capacitance", type=float)
+    parser.add_argument("-c", "--capacitance", dest="capacitance", type=str)
     parser.add_argument("-d", "--dielectric", dest="dielectric", type=str)
     parser.add_argument("-t", "--tolerance", dest="tolerance", type=float)
-    parser.add_argument("-v", "--voltage", dest="voltage", type=float)
+    parser.add_argument("-v", "--voltage", dest="voltage", type=str)
 
 
 def print_options(
     f: Callable[[type[CapacitorSeries]], list[str]] | Callable[[type[CapacitorSeries]], list[float]],
     params: CapacitorParamsOptional,
+    format_eng: bool = False,
 ) -> None:
     for series in SERIES:
         if series.supports(params):
             print(f"{series.get_name()}:")
             for value in f(series):
-                print(f"\t{value}")
+                if isinstance(value, float):
+                    if format_eng:
+                        print(format_engineering(value))
+                    else:
+                        print(value)
+                else:
+                    print(value)
+
+
+engineering_prefixes = {
+    "T": 12,
+    "G": 9,
+    "M": 6,
+    "k": 3,
+    "m": -3,
+    "u": -6,
+    "n": -9,
+    "p": -12,
+    "f": -15,
+    "a": -18,
+}
+
+
+def parse_engineering(parsed: str) -> float:
+    parsed = parsed.strip()
+    multiplier = 1.0
+    if parsed[-1] in engineering_prefixes.keys():
+        multiplier = math.pow(10, engineering_prefixes[parsed[-1]])
+        parsed = parsed[:-1]
+    value = float(parsed)
+    return value * multiplier
+
+
+def format_engineering(value: float, decimal_count: int = 2, as_separator: bool = False) -> str:
+    exponent = math.floor(math.log10(value))
+    complete = math.floor(exponent // 3 * 3)
+    remainder = exponent % 3
+    if complete == 0:
+        prefix = ""
+    else:
+        prefix, _ = next(filter(lambda t: t[1] == complete, engineering_prefixes.items()))
+    number = round(value * math.pow(10, remainder - exponent), decimal_count)
+    if as_separator:
+        return f"{number}".replace(".", prefix).replace(",", prefix)  # Ugly solution
+    return f"{number}{prefix}"
 
 
 def create(args: argparse.Namespace) -> None:
-    params = CapacitorParamsOptional(args.package, args.capacitance, args.dielectric, args.tolerance, args.voltage)
+    params = CapacitorParamsOptional(
+        args.package,
+        parse_engineering(args.capacitance) if args.capacitance is not None else None,
+        args.dielectric,
+        args.tolerance,
+        parse_engineering(args.voltage) if args.voltage is not None else None,
+    )
     if params.package is None:
         print("Package not specified, supported values are:")
         print_options(lambda s: s.get_packages(params), params)
@@ -211,7 +262,7 @@ def create(args: argparse.Namespace) -> None:
         sys.exit(0)
     if params.voltage is None:
         print("Voltage not specified, supported values are:")
-        print_options(lambda s: s.get_voltages(params), params)
+        print_options(lambda s: s.get_voltages(params), params, format_eng=True)
         sys.exit(0)
     if params.tolerance is None:
         print("Tolerance not specified, supported values are:")
@@ -219,7 +270,7 @@ def create(args: argparse.Namespace) -> None:
         sys.exit(0)
     if params.capacitance is None:
         print("Capacitance not specified, supported values are:")
-        print_options(lambda s: s.get_capacitances(params), params)
+        print_options(lambda s: s.get_capacitances(params), params, format_eng=True)
         sys.exit(0)
     params_full = cast(CapacitorParams, params)
     for series in SERIES:
