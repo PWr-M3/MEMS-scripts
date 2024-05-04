@@ -7,10 +7,11 @@ import git
 import xdg
 import kiutils.libraries
 
+from mems.library.lib_utils import LIBRARY_RESOURCE_NAME, get_lib_path
+
 logger = logging.getLogger(__name__)
 
 URL = "git@github.com:PWr-M3/MEMSComponents.git"
-RESOURCE_NAME = "MEMSComponents"
 KICAD_RESOURCE_NAME = "kicad"
 SYMBOL_SHORTHAND = "MEMS_SYMBOLS"
 FOOTPRINT_SHORTHAND = "MEMS_FOOTPRINTS"
@@ -31,21 +32,12 @@ def install_lib(path: Path):
 
     logger.info(f"Cloning library from {URL}")
     _ = git.Repo.clone_from(URL, path)
-    symlink_path = Path(xdg.BaseDirectory.xdg_data_dirs[0]) / RESOURCE_NAME
+    symlink_path = Path(xdg.BaseDirectory.xdg_data_dirs[0]) / LIBRARY_RESOURCE_NAME
     if not os.path.lexists(symlink_path):
         logger.info(f"Symlinking library to: {symlink_path}")
         os.symlink(path.resolve(), symlink_path, target_is_directory=True)
 
     configure_kicad()
-
-
-def get_lib_path() -> Path | None:
-    """Returns path to library in data directory or None if not found."""
-    paths = xdg.BaseDirectory.load_data_paths(RESOURCE_NAME)
-    try:
-        return Path(next(paths)).resolve()
-    except StopIteration:
-        return None
 
 
 def get_kicad_config_path() -> Path:

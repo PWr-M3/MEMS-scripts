@@ -12,7 +12,7 @@ import termcolor
 import requests
 from bs4 import BeautifulSoup
 
-RESOURCE_NAME = "MEMS-scripts"
+LIBRARY_RESOURCE_NAME = "MEMS-scripts"
 
 
 def get_main_sch():
@@ -25,7 +25,7 @@ def get_main_sch():
 
 def get_data_dir() -> Path:
     """Return directory where data is stored."""
-    return Path(xdg.BaseDirectory.save_data_path(RESOURCE_NAME))
+    return Path(xdg.BaseDirectory.save_data_path(LIBRARY_RESOURCE_NAME))
 
 
 def get_config():
