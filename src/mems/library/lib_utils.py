@@ -1,6 +1,7 @@
 import logging
 import xdg
 import sys
+import git
 from pathlib import Path
 
 import kiutils.symbol
@@ -17,6 +18,30 @@ def get_lib_path() -> Path | None:
         return Path(next(paths)).resolve()
     except StopIteration:
         return None
+
+
+def get_lib_repo() -> git.Repo:
+    """Returns repository of components"""
+    path = get_lib_path()
+    if path is None:
+        logger.error("Cannot open library repository as it isn't installed. Install with 'mems library install'")
+        sys.exit(1)
+    return git.Repo(path)
+
+
+def check_repo_clean(repo: git.Repo):
+    """Stops program if repo is not clean."""
+    if repo.is_dirty(untracked_files=True):
+        logger.error("Repository is dirty. Aborting. Commit all changes before proceeding.")
+        sys.exit(1)
+    logger.debug("Repo is clean. Proceeding")
+
+
+def commit_lib_repo(repo: git.Repo, message: str):
+    """Commits all changes in the repo."""
+    repo.git.add(all=True)
+    repo.index.commit(message)
+    logger.info("Changes commited to repository. Remember to push them to origin.")
 
 
 def load_symbol_library(name: str) -> kiutils.symbol.SymbolLib:

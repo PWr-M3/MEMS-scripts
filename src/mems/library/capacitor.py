@@ -10,7 +10,7 @@ import math
 
 import kiutils.symbol
 import kiutils.utils.sexpr
-from mems.library.lib_utils import load_symbol_library
+from mems.library.lib_utils import load_symbol_library, get_lib_repo, check_repo_clean, commit_lib_repo
 
 
 import mems.utils as utils
@@ -95,14 +95,24 @@ class CapacitorSeries(ABC):
             time.sleep(2)
             response = utils.search_mouser(mpn)
 
-        # TODO: Implement better part selection
+        parts = []
         for part in response["SearchResults"]["Parts"]:
-            if "ManufacturerPartNumber" in part and mpn in part["ManufacturerPartNumber"]:
-                sku = part["MouserPartNumber"]
-                if sku is not None and sku != "N/A":
-                    return sku
+            p_mpn = part.get("ManufacturerPartNumber", None)
+            sku = part.get("MouserPartNumber", None)
+            availibility = part.get("Availability", None)
+            parts.append((p_mpn, sku, availibility))
 
-        return None
+        filters = [
+            lambda x: x[2] is not None,
+            lambda x: mpn in x[0],
+            lambda x: x[1] is not None and x[1] != "N/A",
+        ]
+        parts_filtered = filter(lambda x: all(f(x) for f in filters), parts)
+
+        part = next(parts_filtered, None)  # type: ignore
+        if part is None:
+            return None
+        return part[1]
 
     @classmethod
     @abstractmethod
@@ -274,6 +284,9 @@ def format_engineering(value: float, decimal_count: int = 2, as_separator: bool 
 
 
 def create(args: argparse.Namespace) -> None:
+    repo = get_lib_repo()
+    check_repo_clean(repo)
+
     params = CapacitorParamsOptional(
         args.package,
         parse_engineering(args.capacitance) if args.capacitance is not None else None,
@@ -288,7 +301,10 @@ def create(args: argparse.Namespace) -> None:
     params_full = cast(CapacitorParams, params)
     sku = series.get_on_mouser(params_full)
     if sku is not None:
+        logger.info("Capacitor exists. Creating new symbol.")
         add_symbol(params_full, series, sku)
+        mpn = series.get_mpn(params_full)
+        commit_lib_repo(repo, f"Add {mpn} capacitor")
     else:
         logger.error(f"MPN: {series.get_mpn(params_full)} doesn't exist.")
         sys.exit(1)
@@ -301,14 +317,14 @@ def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], sku: str)
     description = (
         f"{series.get_name()} series"
         f" {format_engineering(params.capacitance)}F capacitor"
-        f", {int(params.voltage*100)}%"
+        f", {int(params.tolerance*100)}%"
         f", {int(params.voltage)}V"
     )
     name = (
         f"C"
         f"_{format_engineering(params.capacitance)}F"
         f"_{params.package}"
-        f"_{int(params.voltage)}"
+        f"_{int(params.voltage)}V"
         f"_{params.dielectric}"
         f"_{series.get_mpn(params)}"
     )
@@ -324,14 +340,17 @@ def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], sku: str)
         "TEMPLATE_DESCRIPTION": description,
         "TEMPLATE_DATASHEET": series.get_datasheet(params),
         "TEMPLATE_FOOTPRINT": PACKAGES[params.package],
+        "TEMPLATE_TEMPLATE": series.get_template_name(params),
     }
-    sexpr = TEMPLATE.replace("TEMPLATE_TEMPLATE", name)
+    sexpr = TEMPLATE
     for old, new in replacements.items():
         sexpr = sexpr.replace(old, new)
 
     new_symbol = kiutils.symbol.Symbol.from_sexpr(kiutils.utils.sexpr.parse_sexp(sexpr))
+    logger.info("New symbol created")
     library.symbols.append(new_symbol)
     library.to_file()
+    logger.info("Symbol added to library and saved")
 
 
 def acquire_parameters(params: CapacitorParamsOptional) -> None:

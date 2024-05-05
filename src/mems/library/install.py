@@ -7,7 +7,7 @@ import git
 import xdg
 import kiutils.libraries
 
-from mems.library.lib_utils import LIBRARY_RESOURCE_NAME, get_lib_path
+from mems.library.lib_utils import LIBRARY_RESOURCE_NAME, get_lib_path, get_lib_repo, check_repo_clean
 
 logger = logging.getLogger(__name__)
 
@@ -124,15 +124,8 @@ def setup_kicad_paths(kicad_common_path: Path):
 
 
 def update_from_git():
-    lib_path = get_lib_path()
-    if lib_path is None:
-        logger.error(LIBRARY_NOT_INSTALLED_MSG)
-        sys.exit(1)
-
-    repo = git.Repo(lib_path)
-    if repo.is_dirty(untracked_files=True):
-        logger.error("Repository is dirty. Aborting. Commit all changes before proceeding.")
-        sys.exit(1)
+    repo = get_lib_repo()
+    check_repo_clean(repo)
 
     logger.info("Pulling latest changes from origin.")
     repo.remotes.origin.pull()
