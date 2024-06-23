@@ -21,23 +21,22 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CapacitorParamsOptional:
     package: str | None = None
-    capacitance: float | None = None
+    capacitance_pf: int | None = None
     dielectric: str | None = None
-    tolerance: float | None = None
-    voltage: float | None = None
+    tolerance_ppm: int | None = None
+    voltage_mv: float | None = None
 
 
 @dataclass
 class CapacitorParams:
     package: str
-    capacitance: float
+    capacitance_pf: int
     dielectric: str
-    tolerance: float
-    voltage: float
+    tolerance_ppm: int
+    voltage_mv: int
 
 
 class CapacitorSeries(ABC):
-
     @classmethod
     @abstractmethod
     def get_name(cls) -> str:
@@ -50,7 +49,7 @@ class CapacitorSeries(ABC):
 
     @classmethod
     @abstractmethod
-    def get_capacitances(cls, params: CapacitorParamsOptional) -> list[float]:
+    def get_capacitances(cls, params: CapacitorParamsOptional) -> list[int]:
         return []
 
     @classmethod
@@ -60,30 +59,30 @@ class CapacitorSeries(ABC):
 
     @classmethod
     @abstractmethod
-    def get_tolerances(cls, params: CapacitorParamsOptional) -> list[float]:
+    def get_tolerances(cls, params: CapacitorParamsOptional) -> list[int]:
         return []
 
     @classmethod
     @abstractmethod
-    def get_voltages(cls, params: CapacitorParamsOptional) -> list[float]:
+    def get_voltages(cls, params: CapacitorParamsOptional) -> list[int]:
         return []
 
     @classmethod
     def supports(cls, params: CapacitorParamsOptional) -> bool:
         if params.package is not None and params.package not in cls.get_packages(params):
             return False
-        if params.capacitance is not None and params.capacitance not in cls.get_capacitances(params):
+        if params.capacitance_pf is not None and params.capacitance_pf not in cls.get_capacitances(params):
             return False
         if params.dielectric is not None and params.dielectric not in cls.get_dielectrics(params):
             return False
-        if params.tolerance is not None and params.tolerance not in cls.get_tolerances(params):
+        if params.tolerance_ppm is not None and params.tolerance_ppm not in cls.get_tolerances(params):
             return False
-        if params.voltage is not None and params.voltage not in cls.get_voltages(params):
+        if params.voltage_mv is not None and params.voltage_mv not in cls.get_voltages(params):
             return False
         return True
 
     @classmethod
-    def get_on_mouser(cls, params: CapacitorParams) -> str | None:
+    def get_on_mouser(cls, params: CapacitorParams) -> tuple[str, str] | None:
         if not cls.supports(cast(CapacitorParamsOptional, params)):
             return None
         mpn = cls.get_mpn(params)
@@ -103,16 +102,16 @@ class CapacitorSeries(ABC):
             parts.append((p_mpn, sku, availibility))
 
         filters = [
-            lambda x: x[2] is not None,
+            lambda x: x[2] is not None and x[2] != "None",
             lambda x: mpn in x[0],
-            lambda x: x[1] is not None and x[1] != "N/A",
+            lambda x: x[1] is not None and x[1] != "None" and x[1] != "N/A",
         ]
         parts_filtered = filter(lambda x: all(f(x) for f in filters), parts)
 
         part = next(parts_filtered, None)  # type: ignore
         if part is None:
             return None
-        return part[1]
+        return (part[0], part[1])
 
     @classmethod
     @abstractmethod
@@ -138,7 +137,7 @@ class KemetC0G(CapacitorSeries):
     @classmethod
     def get_tolerances(cls, params):
         _ = params
-        return [0.01, 0.02, 0.05, 0.1, 0.2]
+        return [10_000, 20_000, 50_000, 100_000, 200_000]
 
     @classmethod
     def get_packages(cls, params):
@@ -153,7 +152,7 @@ class KemetC0G(CapacitorSeries):
     @classmethod
     def get_voltages(cls, params):
         _ = params
-        return [10.0, 16.0, 25.0, 50.0, 100.0, 200.0, 250.0]
+        return [10_000, 16_000, 25_000, 50_000, 100_000, 200_000, 250_000]
 
     @classmethod
     def get_capacitances(cls, params):
@@ -185,20 +184,100 @@ class KemetC0G(CapacitorSeries):
             9.1,
         ]
         multipliers = [1e-12, 1e-11, 1e-10, 1e-9, 1e-8]
-        return [p * m for m, p in itertools.product(multipliers, prefixes)]
+        return [int(p * m * 1e12) for m, p in itertools.product(multipliers, prefixes)]
 
     @classmethod
     def get_mpn(cls, params):
-        value = params.capacitance / 1e-12
-        order = math.floor(math.log10(value))
-        prefix = math.floor(value / math.pow(10, order - 1))
+        value = params.capacitance_pf
+        order = math.floor(math.log10(value)) - 1
+        prefix = math.floor(value / math.pow(10, order))
         if order == 0:
             order = 9
-        tolerances = {0.01: "F", 0.02: "G", 0.05: "J", 0.1: "K", 0.2: "M"}
-        voltages = {10: 8, 16: 4, 25: 3, 50: 5, 100: 1, 200: 2, 250: "A"}
+        tolerances = {10_000: "F", 20_000: "G", 50_000: "J", 100_000: "K", 200_000: "M"}
+        voltages = {10_000: 8, 16_000: 4, 25_000: 3, 50_000: 5, 100_000: 1, 200_000: 2, 250_000: "A"}
+
+        return f"C{params.package}C{prefix:2d}{order:1d}{tolerances[params.tolerance_ppm]}{voltages[int(params.voltage_mv)]}G"
+
+    @classmethod
+    def get_template_name(cls, params):
+        _ = params
+        return "C"
+
+    @classmethod
+    def get_datasheet(cls, params):
+        _ = params
+        return f"https://ksim3.kemet.com/capacitor-simulation?pn={cls.get_mpn(params)}"
+
+
+class KemetX7R(CapacitorSeries):
+    @classmethod
+    def get_name(cls):
+        return "KemetX7R"
+
+    @classmethod
+    def get_tolerances(cls, params):
+        _ = params
+        return [50_000, 100_000, 200_000]
+
+    @classmethod
+    def get_packages(cls, params):
+        _ = params
+        return ["0402", "0805"]
+
+    @classmethod
+    def get_dielectrics(cls, params):
+        _ = params
+        return ["X7R"]
+
+    @classmethod
+    def get_voltages(cls, params):
+        _ = params
+        return [6_300, 10_000, 16_000, 25_000, 35_000, 50_000, 100_000, 200_000, 250_000]
+
+    @classmethod
+    def get_capacitances(cls, params):
+        _ = params
+        prefixes = [
+            1,
+            1.2,
+            1.5,
+            1.8,
+            2.2,
+            2.7,
+            3.3,
+            3.9,
+            4.7,
+            5.6,
+            6.8,
+            8.2,
+        ]
+        multipliers = [1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6]
+        result = [int(p * m * 1e12) for m, p in itertools.product(multipliers, prefixes)]
+        result += [int(10e-6 * 1e12), int(22e-6 * 1e12)]
+        return result
+
+    @classmethod
+    def get_mpn(cls, params):
+        value = params.capacitance_pf
+        order = math.floor(math.log10(value)) - 1
+        prefix = math.floor(value / math.pow(10, order))
+        if order == 0:
+            order = 9
+        tolerances = {50_000: "J", 100_000: "K", 200_000: "M"}
+        voltages = {
+            6_300: 9,
+            10_000: 8,
+            16_000: 4,
+            25_000: 3,
+            35_000: 6,
+            50_000: 5,
+            100_000: 1,
+            200_000: 2,
+            250_000: "A",
+        }
 
         return (
-            f"C{params.package}C{prefix:2d}{order:1d}{tolerances[params.tolerance]}{voltages[int(params.voltage)]}GAC"
+            f"C{params.package}C{prefix}{order:1d}{tolerances[params.tolerance_ppm]}{voltages[int(params.voltage_mv)]}R"
         )
 
     @classmethod
@@ -212,7 +291,87 @@ class KemetC0G(CapacitorSeries):
         return f"https://ksim3.kemet.com/capacitor-simulation?pn={cls.get_mpn(params)}"
 
 
-SERIES: list[type[CapacitorSeries]] = [KemetC0G]
+class KemetX5R(CapacitorSeries):
+    @classmethod
+    def get_name(cls):
+        return "KemetX5R"
+
+    @classmethod
+    def get_tolerances(cls, params):
+        _ = params
+        return [100_000, 200_000]
+
+    @classmethod
+    def get_packages(cls, params):
+        _ = params
+        return ["0402", "0805"]
+
+    @classmethod
+    def get_dielectrics(cls, params):
+        _ = params
+        return ["X5R"]
+
+    @classmethod
+    def get_voltages(cls, params):
+        _ = params
+        return [4_000, 6_300, 10_000, 16_000, 25_000, 35_000, 50_000]
+
+    @classmethod
+    def get_capacitances(cls, params):
+        _ = params
+        prefixes = [
+            1,
+            1.2,
+            1.5,
+            1.8,
+            2.2,
+            2.7,
+            3.3,
+            3.9,
+            4.7,
+            5.6,
+            6.8,
+            8.2,
+        ]
+        multipliers = [1e-8, 1e-7, 1e-6]
+        result = [int(p * m * 1e12) for m, p in itertools.product(multipliers, prefixes)]
+        result += [int(10e-6 * 1e12), int(22e-6 * 1e12), int(47e-6 * 1e12)]
+        return result
+
+    @classmethod
+    def get_mpn(cls, params):
+        value = params.capacitance_pf
+        order = math.floor(math.log10(value)) - 1
+        prefix = math.floor(value / math.pow(10, order))
+        if order == 0:
+            order = 9
+        tolerances = {100_000: "K", 200_000: "M"}
+        voltages = {
+            4_000: 7,
+            6_300: 9,
+            10_000: 8,
+            16_000: 4,
+            25_000: 3,
+            35_000: 6,
+            50_000: 5,
+        }
+
+        return (
+            f"C{params.package}C{prefix}{order:1d}{tolerances[params.tolerance_ppm]}{voltages[int(params.voltage_mv)]}P"
+        )
+
+    @classmethod
+    def get_template_name(cls, params):
+        _ = params
+        return "C"
+
+    @classmethod
+    def get_datasheet(cls, params):
+        _ = params
+        return f"https://ksim3.kemet.com/capacitor-simulation?pn={cls.get_mpn(params)}"
+
+
+SERIES: list[type[CapacitorSeries]] = [KemetC0G, KemetX7R, KemetX5R]
 
 PACKAGES = {"0805": "Capacitor_SMD:C_0805_2012Metric", "0402": "Capacitor_SMD:C_0402_1005Metric"}
 
@@ -226,22 +385,12 @@ def add_subparser(parser: argparse.ArgumentParser):
     parser.add_argument("-i", "--index", dest="index", type=int)
 
 
-def print_options(
-    f: Callable[[type[CapacitorSeries]], list[str]] | Callable[[type[CapacitorSeries]], list[float]],
-    params: CapacitorParamsOptional,
-    format_eng: bool = False,
-) -> None:
+def print_options(params: CapacitorParamsOptional, f: Callable[[type[CapacitorSeries]], list[str]]) -> None:
     for series in SERIES:
         if series.supports(params):
             print(f"{series.get_name()}:")
             for value in f(series):
-                if isinstance(value, float):
-                    if format_eng:
-                        print(format_engineering(value))
-                    else:
-                        print(value)
-                else:
-                    print(value)
+                print(value)
 
 
 engineering_prefixes = {
@@ -289,21 +438,21 @@ def create(args: argparse.Namespace) -> None:
 
     params = CapacitorParamsOptional(
         args.package,
-        parse_engineering(args.capacitance) if args.capacitance is not None else None,
+        int(parse_engineering(args.capacitance) * 1e12) if args.capacitance is not None else None,
         args.dielectric,
-        args.tolerance,
-        parse_engineering(args.voltage) if args.voltage is not None else None,
+        int(args.tolerance * 1e4) if args.tolerance is not None else None,
+        int(parse_engineering(args.voltage) * 1e3) if args.voltage is not None else None,
     )
     acquire_parameters(params)
 
     series = select_series(args.index, params)
 
     params_full = cast(CapacitorParams, params)
-    sku = series.get_on_mouser(params_full)
-    if sku is not None:
+    ret = series.get_on_mouser(params_full)
+    if ret is not None:
+        mpn, sku = ret
         logger.info("Capacitor exists. Creating new symbol.")
         add_symbol(params_full, series, sku)
-        mpn = series.get_mpn(params_full)
         commit_lib_repo(repo, f"Add {mpn} capacitor")
     else:
         logger.error(f"MPN: {series.get_mpn(params_full)} doesn't exist.")
@@ -316,27 +465,27 @@ def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], sku: str)
 
     description = (
         f"{series.get_name()} series"
-        f" {format_engineering(params.capacitance)}F capacitor"
-        f", {int(params.tolerance*100)}%"
-        f", {int(params.voltage)}V"
+        f" {format_engineering(params.capacitance_pf*1e-12)}F capacitor"
+        f", {int(params.tolerance_ppm*1e-4)}%"
+        f", {int(params.voltage_mv*1e-3)}V"
     )
     name = (
         f"C"
-        f"_{format_engineering(params.capacitance)}F"
+        f"_{format_engineering(params.capacitance_pf*1e-12, as_separator=True)}"
         f"_{params.package}"
-        f"_{int(params.voltage)}V"
+        f"_{int(params.voltage_mv*1e-3)}V"
         f"_{params.dielectric}"
         f"_{series.get_mpn(params)}"
     )
 
     replacements = {
         "TEMPLATE_NAME": name,
-        "TEMPLATE_VALUE": format_engineering(params.capacitance),
+        "TEMPLATE_VALUE": format_engineering(params.capacitance_pf * 1e-12, as_separator=True),
         "TEMPLATE_MPN": series.get_mpn(params),
         "TEMPLATE_MOUSER": sku,
         "TEMPLATE_DIELECTRIC": params.dielectric,
-        "TEMPLATE_TOLERANCE": f"{int(params.tolerance*100)}%",
-        "TEMPLATE_VOLTAGE": f"{int(params.voltage)}V",
+        "TEMPLATE_TOLERANCE": f"{params.tolerance_ppm*1e-4:.1f}%",
+        "TEMPLATE_VOLTAGE": f"{params.voltage_mv*1e-3:.1f}V",
         "TEMPLATE_DESCRIPTION": description,
         "TEMPLATE_DATASHEET": series.get_datasheet(params),
         "TEMPLATE_FOOTPRINT": PACKAGES[params.package],
@@ -356,23 +505,23 @@ def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], sku: str)
 def acquire_parameters(params: CapacitorParamsOptional) -> None:
     if params.package is None:
         print("Package not specified, pass it with '-p', supported values are:")
-        print_options(lambda s: s.get_packages(params), params)
+        print_options(params, lambda s: s.get_packages(params))
         sys.exit(0)
     if params.dielectric is None:
         print("Dielectric not specified, pass it with '-d', supported values are:")
-        print_options(lambda s: s.get_dielectrics(params), params)
+        print_options(params, lambda s: s.get_dielectrics(params))
         sys.exit(0)
-    if params.voltage is None:
+    if params.voltage_mv is None:
         print("Voltage not specified, pass it with '-v', supported values are:")
-        print_options(lambda s: s.get_voltages(params), params, format_eng=True)
+        print_options(params, lambda s: [format_engineering(volt * 1e-3) + "V" for volt in s.get_voltages(params)])
         sys.exit(0)
-    if params.tolerance is None:
+    if params.tolerance_ppm is None:
         print("Tolerance not specified, pass it with '-t' supported values are:")
-        print_options(lambda s: s.get_tolerances(params), params)
+        print_options(params, lambda s: [str(tol * 1e-4) + "%" for tol in s.get_tolerances(params)])
         sys.exit(0)
-    if params.capacitance is None:
+    if params.capacitance_pf is None:
         print("Capacitance not specified, pass it with '-c', supported values are:")
-        print_options(lambda s: s.get_capacitances(params), params, format_eng=True)
+        print_options(params, lambda s: [format_engineering(cap * 1e-12) + "F" for cap in s.get_capacitances(params)])
         sys.exit(0)
 
 
