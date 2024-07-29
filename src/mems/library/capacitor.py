@@ -99,18 +99,32 @@ class CapacitorSeries(ABC):
             p_mpn = part.get("ManufacturerPartNumber", None)
             sku = part.get("MouserPartNumber", None)
             availibility = part.get("Availability", None)
-            parts.append((p_mpn, sku, availibility))
+            price_breaks = part.get("PriceBreaks", [])
+            if (
+                price_breaks is None
+                or len(price_breaks) == 0
+                or not any(price["Quantity"] <= 10 for price in price_breaks)
+            ):
+                availibility = False
+            price = None
+            if len(price_breaks) > 0:
+                price = float(price_breaks[0]["Price"].replace(",", ".").split()[0])
+            parts.append((p_mpn, sku, availibility, price))
 
         filters = [
-            lambda x: x[2] is not None and x[2] != "None",
+            lambda x: x[2] is not None and x[2] != "None" and x[2],
             lambda x: mpn in x[0],
             lambda x: x[1] is not None and x[1] != "None" and x[1] != "N/A",
         ]
         parts_filtered = filter(lambda x: all(f(x) for f in filters), parts)
+        parts_sorted = sorted(parts_filtered, key=lambda part: part[3])
 
-        part = next(parts_filtered, None)  # type: ignore
-        if part is None:
+        if not parts_sorted:
             return None
+        part = parts_sorted[0]
+
+        logger.info(f"Found part: {part[0]} for {part[3]} zł")
+
         return (part[0], part[1])
 
     @classmethod
@@ -125,7 +139,7 @@ class CapacitorSeries(ABC):
 
     @classmethod
     @abstractmethod
-    def get_datasheet(cls, params: CapacitorParams) -> str:
+    def get_datasheet(cls, mpn: str) -> str:
         return "NON_EXISTANT_DATASHEET"
 
 
@@ -191,7 +205,7 @@ class KemetC0G(CapacitorSeries):
         value = params.capacitance_pf
         order = math.floor(math.log10(value)) - 1
         prefix = math.floor(value / math.pow(10, order))
-        if order == 0:
+        if order == -1:
             order = 9
         tolerances = {10_000: "F", 20_000: "G", 50_000: "J", 100_000: "K", 200_000: "M"}
         voltages = {10_000: 8, 16_000: 4, 25_000: 3, 50_000: 5, 100_000: 1, 200_000: 2, 250_000: "A"}
@@ -204,9 +218,8 @@ class KemetC0G(CapacitorSeries):
         return "C"
 
     @classmethod
-    def get_datasheet(cls, params):
-        _ = params
-        return f"https://ksim3.kemet.com/capacitor-simulation?pn={cls.get_mpn(params)}"
+    def get_datasheet(cls, mpn):
+        return f"https://ksim3.kemet.com/capacitor-simulation?pn={mpn}"
 
 
 class KemetX7R(CapacitorSeries):
@@ -261,7 +274,7 @@ class KemetX7R(CapacitorSeries):
         value = params.capacitance_pf
         order = math.floor(math.log10(value)) - 1
         prefix = math.floor(value / math.pow(10, order))
-        if order == 0:
+        if order == -1:
             order = 9
         tolerances = {50_000: "J", 100_000: "K", 200_000: "M"}
         voltages = {
@@ -286,9 +299,8 @@ class KemetX7R(CapacitorSeries):
         return "C"
 
     @classmethod
-    def get_datasheet(cls, params):
-        _ = params
-        return f"https://ksim3.kemet.com/capacitor-simulation?pn={cls.get_mpn(params)}"
+    def get_datasheet(cls, mpn):
+        return f"https://ksim3.kemet.com/capacitor-simulation?pn={mpn}"
 
 
 class KemetX5R(CapacitorSeries):
@@ -343,7 +355,7 @@ class KemetX5R(CapacitorSeries):
         value = params.capacitance_pf
         order = math.floor(math.log10(value)) - 1
         prefix = math.floor(value / math.pow(10, order))
-        if order == 0:
+        if order == -1:
             order = 9
         tolerances = {100_000: "K", 200_000: "M"}
         voltages = {
@@ -366,9 +378,8 @@ class KemetX5R(CapacitorSeries):
         return "C"
 
     @classmethod
-    def get_datasheet(cls, params):
-        _ = params
-        return f"https://ksim3.kemet.com/capacitor-simulation?pn={cls.get_mpn(params)}"
+    def get_datasheet(cls, mpn):
+        return f"https://ksim3.kemet.com/capacitor-simulation?pn={mpn}"
 
 
 SERIES: list[type[CapacitorSeries]] = [KemetC0G, KemetX7R, KemetX5R]
@@ -383,6 +394,7 @@ def add_subparser(parser: argparse.ArgumentParser):
     parser.add_argument("-t", "--tolerance", dest="tolerance", type=float)
     parser.add_argument("-v", "--voltage", dest="voltage", type=str)
     parser.add_argument("-i", "--index", dest="index", type=int)
+    parser.add_argument("--dry", "--dry-run", dest="dry", action="store_true")
 
 
 def print_options(params: CapacitorParamsOptional, f: Callable[[type[CapacitorSeries]], list[str]]) -> None:
@@ -427,9 +439,11 @@ def format_engineering(value: float, decimal_count: int = 2, as_separator: bool 
     else:
         prefix, _ = next(filter(lambda t: t[1] == complete, engineering_prefixes.items()))
     number = round(value * math.pow(10, remainder - exponent), decimal_count)
-    if as_separator:
-        return f"{number}".replace(".", prefix).replace(",", prefix)  # Ugly solution
-    return f"{number}{prefix}"
+    if (number - math.floor(number)) > 1e-20:
+        if as_separator:
+            return f"{number}".replace(".", prefix).replace(",", prefix)  # Ugly solution
+        return f"{number}{prefix}"
+    return f"{int(number)}{prefix}"
 
 
 def create(args: argparse.Namespace) -> None:
@@ -452,20 +466,21 @@ def create(args: argparse.Namespace) -> None:
     if ret is not None:
         mpn, sku = ret
         logger.info("Capacitor exists. Creating new symbol.")
-        add_symbol(params_full, series, sku)
-        commit_lib_repo(repo, f"Add {mpn} capacitor")
+        if not args.dry:
+            add_symbol(params_full, series, mpn, sku)
+            commit_lib_repo(repo, f"Add {mpn} capacitor")
     else:
         logger.error(f"MPN: {series.get_mpn(params_full)} doesn't exist.")
         sys.exit(1)
 
 
-def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], sku: str):
+def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], mpn: str, sku: str):
     library = load_symbol_library("MEMS_Capacitors")
     name = series.get_template_name(params)
 
     description = (
-        f"{series.get_name()} series"
-        f" {format_engineering(params.capacitance_pf*1e-12)}F capacitor"
+        f"{format_engineering(params.capacitance_pf*1e-12)}F capacitor"
+        f", {series.get_name()} series"
         f", {int(params.tolerance_ppm*1e-4)}%"
         f", {int(params.voltage_mv*1e-3)}V"
     )
@@ -475,19 +490,19 @@ def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], sku: str)
         f"_{params.package}"
         f"_{int(params.voltage_mv*1e-3)}V"
         f"_{params.dielectric}"
-        f"_{series.get_mpn(params)}"
+        f"_{mpn}"
     )
 
     replacements = {
         "TEMPLATE_NAME": name,
         "TEMPLATE_VALUE": format_engineering(params.capacitance_pf * 1e-12, as_separator=True),
-        "TEMPLATE_MPN": series.get_mpn(params),
+        "TEMPLATE_MPN": mpn,
         "TEMPLATE_MOUSER": sku,
         "TEMPLATE_DIELECTRIC": params.dielectric,
         "TEMPLATE_TOLERANCE": f"{params.tolerance_ppm*1e-4:.1f}%",
         "TEMPLATE_VOLTAGE": f"{params.voltage_mv*1e-3:.1f}V",
         "TEMPLATE_DESCRIPTION": description,
-        "TEMPLATE_DATASHEET": series.get_datasheet(params),
+        "TEMPLATE_DATASHEET": series.get_datasheet(mpn),
         "TEMPLATE_FOOTPRINT": PACKAGES[params.package],
         "TEMPLATE_TEMPLATE": series.get_template_name(params),
     }
@@ -496,7 +511,7 @@ def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], sku: str)
         sexpr = sexpr.replace(old, new)
 
     new_symbol = kiutils.symbol.Symbol.from_sexpr(kiutils.utils.sexpr.parse_sexp(sexpr))
-    logger.info("New symbol created")
+    logger.info(f"New symbol created. MPN: {mpn}")
     library.symbols.append(new_symbol)
     library.to_file()
     logger.info("Symbol added to library and saved")
@@ -577,7 +592,7 @@ TEMPLATE = """
     (property "ki_keywords" "capacitor cap" (at 0 0 0)
       (effects (font (size 1.27 1.27)) hide)
     )
-    (property "ki_description" "TEMPLATE_DESCRIPTION" (at 0 0 0)
+    (property "Description" "TEMPLATE_DESCRIPTION" (at 0 -27.94 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "ki_fp_filters" "C_*" (at 0 0 0)

@@ -41,7 +41,7 @@ def commit_lib_repo(repo: git.Repo, message: str):
     """Commits all changes in the repo."""
     repo.git.add(all=True)
     repo.index.commit(message)
-    logger.info("Changes commited to repository. Remember to push them to origin.")
+    logger.warn("Changes commited to repository. Remember to push them to origin.")
 
 
 def load_symbol_library(name: str) -> kiutils.symbol.SymbolLib:
