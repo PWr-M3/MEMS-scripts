@@ -344,7 +344,7 @@ class BOM:
         for component in components:
             prefix = "".join(char for char in component.reference if not char.isdigit())
             # Check if component doesn't have mpn and is not excluded from having one mandatory
-            if component.mpn is None and prefix not in ["C", "R", "TP"]:
+            if component.mpn is None and prefix not in ["TP"]:
                 self.error(f"Component without MPN: {component.reference}")
 
             # Check if component doesn't have SKU while having real MPN
