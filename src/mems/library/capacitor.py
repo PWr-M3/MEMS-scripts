@@ -481,7 +481,7 @@ def add_symbol(params: CapacitorParams, series: type[CapacitorSeries], mpn: str,
     description = (
         f"{format_engineering(params.capacitance_pf*1e-12)}F capacitor"
         f", {series.get_name()} series"
-        f", {int(params.tolerance_ppm*1e-4)}%"
+        f", tolerance {int(params.tolerance_ppm*1e-4)}%"
         f", {int(params.voltage_mv*1e-3)}V"
     )
     name = (
