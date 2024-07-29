@@ -15,13 +15,6 @@ def add_subparser(parser: argparse.ArgumentParser):
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
     fill_parser = subparsers.add_parser(name="fill", help="Fills in missing fields in library")
     fill_parser.add_argument("path", help="Specifies path to symbol library file")
-    fill_parser.add_argument(
-        "-v",
-        "--verbose",
-        dest="verbose",
-        action="store_true",
-        help="Verbose mode",
-    )
 
     install_parser = subparsers.add_parser(name="install", help="Installs library in specified directory")
     install_parser.add_argument("path", type=Path)

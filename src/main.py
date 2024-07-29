@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def main():
     parser = argparse.ArgumentParser(prog="MEMS Scripts")
     parser.add_argument(
-        "-l", "--log", choices=["DEBUG", "INFO", "WARNIGN", "ERROR", "CRITICAL"], dest="log_level", default="INFO"
+        "-l", "--log", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], dest="log_level", default="INFO"
     )
 
     subparsers = parser.add_subparsers(required=True, help="Subcommand")

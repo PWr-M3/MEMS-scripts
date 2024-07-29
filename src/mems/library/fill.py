@@ -19,11 +19,9 @@ class Library:
         self.sym_lib = None
 
     def run(self):
-
         self.open_sym_lib()
 
-        if self.args.fill:
-            self.fill_fields()
+        self.fill_fields()
 
         self.save_sym_lib()
 
@@ -56,8 +54,7 @@ class Library:
                 if reference == "#PWR":  # ignore power symbols
                     continue
 
-                if self.args.verbose:
-                    print(symbol.entryName)
+                logger.debug(symbol.entryName)
 
                 no_missing_values = True
                 for test in [datasheet, mpn, mouser]:
@@ -119,8 +116,7 @@ class Library:
                 done = True
                 if overwrite or prop.value in ["", "~"]:
                     prop.value = value
-                    if self.args.verbose:
-                        logger.info(f"SETTING {name} to {value}")
+                    logger.debug(f"SETTING {name} to {value}")
 
         if not done:
             new = kiutils.items.common.Property(key=name, value=value)
