@@ -52,11 +52,10 @@ def get_kicad_config_path() -> Path:
 def configure_kicad():
     """Adds library to kicad config, or updates if already added."""
     logger.info("Setting up kicad with library")
-    path = get_kicad_config_path()
-    for directory in path.iterdir():
-        setup_kicad_paths(directory / "kicad_common.json")
-        add_symbol_libs(directory / "sym-lib-table")
-        add_footprint_libs(directory / "fp-lib-table")
+    path = get_kicad_config_path() / "8.0"
+    setup_kicad_common(path / "kicad_common.json")
+    add_symbol_libs(path / "sym-lib-table")
+    add_footprint_libs(path / "fp-lib-table")
 
 
 def add_symbol_libs(sym_lib_path: Path):
@@ -68,7 +67,8 @@ def add_symbol_libs(sym_lib_path: Path):
         sys.exit("Library is not installed")
     for path in (lib_path / "symbols").iterdir():
         if path.suffix == ".kicad_sym":
-            sym_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=f"${{{SYMBOL_SHORTHAND}}}/{path.name}"))
+            uri = f"${{{SYMBOL_SHORTHAND}}}/{path.name}"
+            sym_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=uri))
     sym_lib.to_file()
     logger.info("Symbol library table updated and saved")
 
@@ -81,13 +81,14 @@ def add_footprint_libs(fp_lib_path: Path):
     if lib_path is None:
         sys.exit("Library is not installed")
     for path in (lib_path / "footprints").iterdir():
-        if path.suffix == ".kicad_mod":
-            fp_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=f"${{{FOOTPRINT_SHORTHAND}}}/{path.name}"))
+        if path.suffix == ".pretty":
+            uri = f"${{{FOOTPRINT_SHORTHAND}}}/{path.name}"
+            fp_lib.libs.append(kiutils.libraries.Library(name=path.stem, uri=uri))
     fp_lib.to_file()
     logger.info("Footprint library table updated and saved")
 
 
-def setup_kicad_paths(kicad_common_path: Path):
+def setup_kicad_common(kicad_common_path: Path):
     logger.info("Loading kicad_common.json config file")
     content = {}
     try:
@@ -96,9 +97,9 @@ def setup_kicad_paths(kicad_common_path: Path):
     except IOError as error:
         logger.error(f"Failed to read file: {kicad_common_path}. Error: {error}")
         sys.exit(1)
-    if "environment" not in content:
+    if "environment" not in content or content["environment"] is None:
         content["environment"] = {}
-    if "vars" not in content["environment"]:
+    if "vars" not in content["environment"] or content["environment"]["vars"] is None:
         content["environment"]["vars"] = {}
     var = content["environment"]["vars"]
 
@@ -113,11 +114,40 @@ def setup_kicad_paths(kicad_common_path: Path):
     var[FOOTPRINT_SHORTHAND] = str(lib_path / "footprints")
     var[MODEL_SHORTHAND] = str(lib_path / "3d_models")
 
+    logger.info("Pinning symbol libs.")
+
+    pinned_symbol_libs = content["session"]["pinned_symbol_libs"]
+    pinned_symbol_libs = list(filter(lambda x: "MEMS_" in x, pinned_symbol_libs))
+
+    lib_path = get_lib_path()
+    if lib_path is None:
+        sys.exit("Library is not installed")
+    for path in (lib_path / "symbols").iterdir():
+        if path.suffix == ".kicad_sym":
+            pinned_symbol_libs.append(path.stem)
+
+    content["session"]["pinned_symbol_libs"] = pinned_symbol_libs
+
+    logger.info("Pinning footprint libs")
+
+    pinned_fp_libs = content["session"]["pinned_fp_libs"]
+    pinned_fp_libs = list(filter(lambda x: "MEMS_" in x, pinned_fp_libs))
+
+    lib_path = get_lib_path()
+    if lib_path is None:
+        sys.exit("Library is not installed")
+    for path in (lib_path / "footprints").iterdir():
+        if path.suffix == ".pretty":
+            print(path.stem)
+            pinned_fp_libs.append(path.stem)
+
+    content["session"]["pinned_fp_libs"] = pinned_fp_libs
+
     try:
         with open(kicad_common_path, "w") as f:
             json.dump(content, f)
     except IOError as error:
-        logger.error(f"Failed to read file: {kicad_common_path}. Error: {error}")
+        logger.error(f"Failed to save file: {kicad_common_path}. Error: {error}")
         sys.exit(1)
 
     logger.info("Changes saved to kicad_common.json")
