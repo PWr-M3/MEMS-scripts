@@ -2,10 +2,14 @@ import argparse
 import logging
 import sane_logging
 
-from mems import bom, consolidate, utils
+from mems import bom, consolidate, utils, suppliers
 from mems.library import library
 
 logger = logging.getLogger(__name__)
+
+
+def test(_):
+    print("test")
 
 
 def main():
@@ -15,6 +19,9 @@ def main():
     )
 
     subparsers = parser.add_subparsers(required=True, help="Subcommand")
+
+    parser_test = subparsers.add_parser("test", help="Testing function, used for debugging")
+    parser_test.set_defaults(func=test)
 
     parser_bom = subparsers.add_parser("bom", help="Generate bom and do bom checks")
     bom.add_subparser(parser_bom)
@@ -27,7 +34,8 @@ def main():
 
     args = parser.parse_args()
 
-    sane_logging.SaneLogging().terminal(args.log_level).file(utils.get_data_dir() / "logs").apply(logger.parent)
+    if logger.parent is not None:
+        sane_logging.SaneLogging().terminal(args.log_level).file(utils.get_data_dir() / "logs").apply(logger.parent)
     logger.info("MEMS Scripts started")
 
     args.func(args)
