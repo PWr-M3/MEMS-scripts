@@ -11,6 +11,7 @@ import math
 import kiutils.symbol
 import kiutils.utils.sexpr
 from mems.library.lib_utils import load_symbol_library, get_lib_repo, check_repo_clean, commit_lib_repo
+from mems.utils import format_engineering, parse_engineering
 
 
 import mems.utils as utils
@@ -405,45 +406,6 @@ def print_options(params: CapacitorParamsOptional, f: Callable[[type[CapacitorSe
                 print(value)
 
 
-engineering_prefixes = {
-    "T": 12,
-    "G": 9,
-    "M": 6,
-    "k": 3,
-    "m": -3,
-    "u": -6,
-    "n": -9,
-    "p": -12,
-    "f": -15,
-    "a": -18,
-}
-
-
-def parse_engineering(parsed: str) -> float:
-    parsed = parsed.strip()
-    multiplier = 1.0
-    for prefix, exponent in engineering_prefixes.items():
-        if prefix in parsed:
-            multiplier = math.pow(10, exponent)
-            parsed = parsed.replace(prefix, ".")
-    value = float(parsed)
-    return value * multiplier
-
-
-def format_engineering(value: float, decimal_count: int = 2, as_separator: bool = False) -> str:
-    exponent = math.floor(math.log10(value))
-    complete = math.floor(exponent // 3 * 3)
-    remainder = exponent % 3
-    if complete == 0:
-        prefix = ""
-    else:
-        prefix, _ = next(filter(lambda t: t[1] == complete, engineering_prefixes.items()))
-    number = round(value * math.pow(10, remainder - exponent), decimal_count)
-    if (number - math.floor(number)) > 1e-20:
-        if as_separator:
-            return f"{number}".replace(".", prefix).replace(",", prefix)  # Ugly solution
-        return f"{number}{prefix}"
-    return f"{int(number)}{prefix}"
 
 
 def create(args: argparse.Namespace) -> None:

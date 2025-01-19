@@ -5,6 +5,7 @@ from pathlib import Path
 import mems.library.install as install
 import mems.library.fill as fill
 import mems.library.capacitor as capacitor
+import mems.library.cap_csv as cap_csv
 
 import logging
 
@@ -24,6 +25,8 @@ def add_subparser(parser: argparse.ArgumentParser):
     capacitor_parser = subparsers.add_parser(name="capacitor", help="Creates a capacitor and adds to library")
     capacitor.add_subparser(capacitor_parser)
 
+    _ = subparsers.add_parser(name="cap_csv", help="Regenerate capacitors based on csv")
+
     parser.set_defaults(func=run)
 
 
@@ -39,6 +42,8 @@ def run(args: argparse.Namespace):
         install.configure_kicad()
     if args.subcommand == "capacitor":
         capacitor.create(args)
+    if args.subcommand == "cap_csv":
+        cap_csv.regenerate()
 
 
 if __name__ == "__main__":
