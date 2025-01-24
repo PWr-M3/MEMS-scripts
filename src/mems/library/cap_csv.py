@@ -1,6 +1,7 @@
 import logging
 import sys
 import csv
+import math
 
 import kiutils.symbol
 import kiutils.utils
@@ -11,7 +12,7 @@ from mems.utils import format_engineering
 logger = logging.getLogger(__name__)
 
 CAPACITOR_LIB_NAME = "MEMS_Capacitors"
-POLARIZED_CAP_DIELECTRICS = ["Aluminum", "Tantalum"]
+POLARIZED_CAP_TYPES = ["Aluminum", "Tantalum"]
 
 def regenerate():
     repo = get_lib_repo()
@@ -46,18 +47,18 @@ def load_csv() -> list[dict]:
         reader = csv.DictReader(csvfile)
         for row in reader:
             rows.append(row)
-    return rows
+    return sorted(rows, key=lambda row: float(row["Value scientific [F]:"]))
 
 def create_capacitor_from_row(row: dict) -> kiutils.symbol.Symbol:
     template_name = "C"
-    if row["Dielectric:"] in POLARIZED_CAP_DIELECTRICS:
+    if row["Type:"] in POLARIZED_CAP_TYPES:
         template_name = "C_Pol"
 
     description = (
         f"{format_engineering(float(row['Value scientific [F]:']))}F capacitor"
         f", {row['Tolerance:']}"
         f", {row['Voltage [V]:']}V"
-        f", {row['Dielectric:']}"
+        f", {row['Type:']}"
         f", {row['Package:']}"
     )
     name = (
@@ -65,7 +66,7 @@ def create_capacitor_from_row(row: dict) -> kiutils.symbol.Symbol:
         f"_{format_engineering(float(row['Value scientific [F]:']), as_separator=True)}"
         f"_{row['Package:']}"
         f"_{row['Voltage [V]:']}V"
-        f"_{row['Dielectric:']}"
+        f"_{row['Type:']}"
         f"_{row['MPN:']}"
     )
 
@@ -74,7 +75,7 @@ def create_capacitor_from_row(row: dict) -> kiutils.symbol.Symbol:
         "TEMPLATE_VALUE": format_engineering(float(row['Value scientific [F]:']), as_separator=True),
         "TEMPLATE_MPN": row["MPN:"],
         "TEMPLATE_MOUSER": row["Mouser:"],
-        "TEMPLATE_DIELECTRIC": row["Dielectric:"],
+        "TEMPLATE_DIELECTRIC": row["Type:"],
         "TEMPLATE_TOLERANCE": row["Tolerance:"],
         "TEMPLATE_VOLTAGE": f"{row['Voltage [V]:']}V",
         "TEMPLATE_DESCRIPTION": description,
@@ -159,7 +160,7 @@ TEMPLATE = """
 				(hide yes)
 			)
 		)
-		(property "Dielectric" "TEMPLATE_DIELECTRIC"
+		(property "Type" "TEMPLATE_TYPE"
 			(at 0 -15.24 0)
 			(effects
 				(font
