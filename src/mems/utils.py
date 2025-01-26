@@ -140,12 +140,17 @@ def parse_engineering(parsed: str) -> float:
     return value * multiplier
 
 
-def format_engineering(value: float, decimal_count: int = 2, as_separator: bool = False) -> str:
+def format_engineering(value: float, decimal_count: int = 2, as_separator: bool = False, unit: str | None = None) -> str:
+    if value == 0:
+        return "0" if unit is None else f"0{unit}"
     exponent = math.floor(math.log10(value))
     complete = math.floor(exponent // 3 * 3)
     remainder = exponent % 3
     if complete == 0:
-        prefix = ""
+        if unit is not None:
+            prefix = unit
+        else:
+            prefix = ""
     else:
         prefix, _ = next(filter(lambda t: t[1] == complete, engineering_prefixes.items()))
     number = round(value * math.pow(10, remainder - exponent), decimal_count)

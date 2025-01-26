@@ -4,8 +4,8 @@ from pathlib import Path
 
 import mems.library.install as install
 import mems.library.fill as fill
-import mems.library.capacitor as capacitor
 import mems.library.cap_csv as cap_csv
+import mems.library.res_csv as res_csv
 
 import logging
 
@@ -23,6 +23,7 @@ def add_subparser(parser: argparse.ArgumentParser):
     _ = subparsers.add_parser(name="update", help="Updates library from git")
 
     _ = subparsers.add_parser(name="cap_csv", help="Regenerate capacitors based on csv")
+    _ = subparsers.add_parser(name="res_csv", help="Regenerate resistors based on csv")
 
     parser.set_defaults(func=run)
 
@@ -39,6 +40,8 @@ def run(args: argparse.Namespace):
         install.configure_kicad()
     if args.subcommand == "cap_csv":
         cap_csv.regenerate()
+    if args.subcommand == "res_csv":
+        res_csv.regenerate()
 
 
 if __name__ == "__main__":
