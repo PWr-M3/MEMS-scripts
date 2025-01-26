@@ -11,7 +11,7 @@ from mems.utils import format_engineering
 
 logger = logging.getLogger(__name__)
 
-CAPACITOR_LIB_NAME = "MEMS_Capacitors"
+CAPACITOR_LIB_NAME = "MEMS_Capacitors-Generated"
 POLARIZED_CAP_TYPES = ["Aluminum", "Tantalum"]
 
 def regenerate():

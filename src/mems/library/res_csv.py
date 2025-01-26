@@ -10,7 +10,7 @@ from mems.utils import format_engineering
 
 logger = logging.getLogger(__name__)
 
-RESISTOR_LIB_NAME = "MEMS_Resistors"
+RESISTOR_LIB_NAME = "MEMS_Resistors-Generated"
 
 def regenerate():
     repo = get_lib_repo()
