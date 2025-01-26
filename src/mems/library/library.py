@@ -22,9 +22,6 @@ def add_subparser(parser: argparse.ArgumentParser):
 
     _ = subparsers.add_parser(name="update", help="Updates library from git")
 
-    capacitor_parser = subparsers.add_parser(name="capacitor", help="Creates a capacitor and adds to library")
-    capacitor.add_subparser(capacitor_parser)
-
     _ = subparsers.add_parser(name="cap_csv", help="Regenerate capacitors based on csv")
 
     parser.set_defaults(func=run)
@@ -40,8 +37,6 @@ def run(args: argparse.Namespace):
         logger.info("Running library update")
         install.update_from_git()
         install.configure_kicad()
-    if args.subcommand == "capacitor":
-        capacitor.create(args)
     if args.subcommand == "cap_csv":
         cap_csv.regenerate()
 
