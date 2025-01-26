@@ -51,8 +51,10 @@ def load_csv() -> list[dict]:
 
 def create_capacitor_from_row(row: dict) -> kiutils.symbol.Symbol:
     template_name = "C"
+    polarized = False
     if row["Type:"] in POLARIZED_CAP_TYPES:
         template_name = "C_Pol"
+        polarized = True
 
     description = (
         f"{format_engineering(float(row['Value scientific [F]:']))}F capacitor"
@@ -62,7 +64,7 @@ def create_capacitor_from_row(row: dict) -> kiutils.symbol.Symbol:
         f", {row['Package:']}"
     )
     name = (
-        f"C"
+        f"{"C_Pol" if polarized else "C"}"
         f"_{format_engineering(float(row['Value scientific [F]:']), as_separator=True)}"
         f"_{row['Package:']}"
         f"_{row['Voltage [V]:']}V"
