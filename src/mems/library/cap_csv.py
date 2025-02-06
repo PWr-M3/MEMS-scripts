@@ -77,7 +77,7 @@ def create_capacitor_from_row(row: dict) -> kiutils.symbol.Symbol:
         "TEMPLATE_VALUE": format_engineering(float(row['Value scientific [F]:']), as_separator=True),
         "TEMPLATE_MPN": row["MPN:"],
         "TEMPLATE_MOUSER": row["Mouser:"],
-        "TEMPLATE_DIELECTRIC": row["Type:"],
+        "TEMPLATE_TYPE": row["Type:"],
         "TEMPLATE_TOLERANCE": row["Tolerance:"],
         "TEMPLATE_VOLTAGE": f"{row['Voltage [V]:']}V",
         "TEMPLATE_DESCRIPTION": description,
