@@ -23,19 +23,20 @@ LIBRARY_NOT_INSTALLED_MSG = "Library is not installed. Run 'mems library install
 def install_lib(path: Path):
     """Clones library repository, symlinks it to data_dir and configures kicad to use it."""
     path = path / "MEMSComponents"
-    if get_lib_path() is not None:
-        logger.error("Library is already installed (symlinked in data dircetory)")
-        sys.exit(1)
+
     if path.exists():
-        logger.error("MEMSComponents already exists in passed directory")
+        logger.error("MEMSComponents already exists in passed directory.")
         sys.exit(1)
 
-    logger.info(f"Cloning library from {URL}")
-    _ = git.Repo.clone_from(URL, path)
-    symlink_path = Path(xdg.BaseDirectory.xdg_data_dirs[0]) / LIBRARY_RESOURCE_NAME
-    if not os.path.lexists(symlink_path):
-        logger.info(f"Symlinking library to: {symlink_path}")
-        os.symlink(path.resolve(), symlink_path, target_is_directory=True)
+    if get_lib_path() is None:
+        logger.error("Library not symlinked. Downloading and symlinking")
+
+        logger.info(f"Cloning library from {URL}")
+        _ = git.Repo.clone_from(URL, path)
+        symlink_path = Path(xdg.BaseDirectory.xdg_data_dirs[0]) / LIBRARY_RESOURCE_NAME
+        if not os.path.lexists(symlink_path):
+            logger.info(f"Symlinking library to: {symlink_path}")
+            os.symlink(path.resolve(), symlink_path, target_is_directory=True)
 
     configure_kicad()
 
