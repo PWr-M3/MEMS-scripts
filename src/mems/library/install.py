@@ -24,12 +24,13 @@ def install_lib(path: Path):
     """Clones library repository, symlinks it to data_dir and configures kicad to use it."""
     path = path / "MEMSComponents"
 
-    if path.exists():
-        logger.error("MEMSComponents already exists in passed directory.")
-        sys.exit(1)
 
     if get_lib_path() is None:
         logger.error("Library not symlinked. Downloading and symlinking")
+        
+        if path.exists():
+            logger.error("MEMSComponents already exists in passed directory.")
+            sys.exit(1)
 
         logger.info(f"Cloning library from {URL}")
         _ = git.Repo.clone_from(URL, path)
@@ -53,7 +54,7 @@ def get_kicad_config_path() -> Path:
 def configure_kicad():
     """Adds library to kicad config, or updates if already added."""
     logger.info("Setting up kicad with library")
-    path = get_kicad_config_path() / "8.0"
+    path = get_kicad_config_path() / "9.0"
     setup_kicad_common(path / "kicad_common.json")
     add_symbol_libs(path / "sym-lib-table")
     add_footprint_libs(path / "fp-lib-table")
