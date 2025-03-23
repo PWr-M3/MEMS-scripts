@@ -7,7 +7,8 @@ import git
 import xdg
 import kiutils.libraries
 
-from mems.library.lib_utils import LIBRARY_RESOURCE_NAME, get_lib_path, get_lib_repo, check_repo_clean
+from mems.library.lib_utils import LIBRARY_RESOURCE_NAME, get_lib_path, get_lib_repo
+from mems.utils import check_repo_clean
 
 logger = logging.getLogger(__name__)
 

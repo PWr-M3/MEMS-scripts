@@ -208,7 +208,8 @@ class LCSCSupplier(Supplier, name="LCSC"):
 
 
 
-def add_subparser(parser: argparse.ArgumentParser):
+def add_subparser(subparsers):
+    parser = subparsers.add_parser("bom", help="Generate BOM and execute BOM checks")
     parser.add_argument(
         "-a",
         "--available",
@@ -271,7 +272,9 @@ class BOM:
         self.has_errored = True
 
     def get_path(self):
-        path = utils.get_main_sch()
+        path = utils.get_main_sch_filename()
+        if path is None:
+            sys.exit(1)
         if os.path.exists(path) and self.args.path is None:
             pass
         elif not os.path.exists(path) and self.args.path is None:

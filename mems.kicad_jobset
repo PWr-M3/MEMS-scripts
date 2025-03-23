@@ -1,0 +1,173 @@
+{
+  "jobs": [
+    {
+      "description": "",
+      "id": "cb864e87-c562-4e31-a488-0ada1720a98e",
+      "settings": {
+        "description": "",
+        "fail_on_error": true,
+        "format": "report",
+        "output_filename": "ERC",
+        "severity": 48,
+        "units": "mm"
+      },
+      "type": "sch_erc"
+    },
+    {
+      "description": "",
+      "id": "04b139eb-b504-4c22-af9b-5c520576b641",
+      "settings": {
+        "description": "",
+        "fail_on_error": true,
+        "format": "report",
+        "output_filename": "DRC",
+        "parity": true,
+        "report_all_track_errors": false,
+        "severity": 48,
+        "units": "mm"
+      },
+      "type": "pcb_drc"
+    },
+    {
+      "description": "",
+      "id": "f8857560-cce2-467a-8106-104e0b30f49e",
+      "settings": {
+        "black_and_white": false,
+        "color_theme": "KiCad Classic",
+        "description": "",
+        "drawing_sheet": "",
+        "format": "pdf",
+        "hpgl_page_size": "default",
+        "hpgl_pen_size": 1.016,
+        "hpgl_plot_origin": "A3",
+        "min_pen_width": 847,
+        "output_filename": "./schematic.pdf",
+        "page_size": "auto",
+        "pdf_hierarchical_links": true,
+        "pdf_metadata": true,
+        "pdf_property_popups": true,
+        "plot_all": true,
+        "plot_drawing_sheet": true,
+        "use_background_color": true
+      },
+      "type": "sch_export_plot_pdf"
+    },
+    {
+      "description": "",
+      "id": "e427debd-0e61-4e8d-934b-928fc569bffe",
+      "settings": {
+        "description": "",
+        "disable_aperture_macros": false,
+        "drawing_sheet": "",
+        "include_netlist_attributes": true,
+        "layers": [
+          "F.Cu",
+          "In1.Cu",
+          "In2.Cu",
+          "In3.Cu",
+          "In4.Cu",
+          "In5.Cu",
+          "In6.Cu",
+          "In7.Cu",
+          "In8.Cu",
+          "In9.Cu",
+          "In10.Cu",
+          "In11.Cu",
+          "In12.Cu",
+          "In13.Cu",
+          "In14.Cu",
+          "In15.Cu",
+          "In16.Cu",
+          "In17.Cu",
+          "In18.Cu",
+          "In19.Cu",
+          "In20.Cu",
+          "In21.Cu",
+          "In22.Cu",
+          "In23.Cu",
+          "In24.Cu",
+          "In25.Cu",
+          "In26.Cu",
+          "In27.Cu",
+          "In28.Cu",
+          "In29.Cu",
+          "In30.Cu",
+          "B.Cu",
+          "F.Paste",
+          "B.Paste",
+          "F.SilkS",
+          "B.SilkS",
+          "F.Mask",
+          "B.Mask",
+          "Edge.Cuts"
+        ],
+        "layers_include_on_all": [],
+        "layers_include_on_all_set": false,
+        "layers_to_include_on_all_layers": [],
+        "output_filename": "",
+        "plot_drawing_sheet": false,
+        "plot_footprint_values": true,
+        "plot_invisible_text": false,
+        "plot_pad_numbers": false,
+        "plot_ref_des": true,
+        "precision": 5,
+        "subtract_solder_mask_from_silk": true,
+        "use_drill_origin": false,
+        "use_protel_file_extension": true,
+        "use_x2_format": true
+      },
+      "type": "pcb_export_gerbers"
+    },
+    {
+      "description": "",
+      "id": "2ff5fc43-7ad6-4695-aa64-aa51a75bba31",
+      "settings": {
+        "description": "",
+        "drill_origin": "abs",
+        "excellon.combine_pth_npth": false,
+        "excellon.minimal_header": false,
+        "excellon.mirror_y": false,
+        "excellon.oval_drill_route": false,
+        "format": "excellon",
+        "generate_map": true,
+        "gerber_precision": 5,
+        "map_format": "gerberx2",
+        "output_dir": "",
+        "units": "mm",
+        "zero_format": "decimal"
+      },
+      "type": "pcb_export_drill"
+    }
+  ],
+  "meta": {
+    "version": 1
+  },
+  "outputs": [
+    {
+      "description": "Fab",
+      "id": "0bf946e5-923c-4033-8f1d-c6d2c89da2aa",
+      "only": [
+        "cb864e87-c562-4e31-a488-0ada1720a98e",
+        "04b139eb-b504-4c22-af9b-5c520576b641",
+        "f8857560-cce2-467a-8106-104e0b30f49e"
+      ],
+      "settings": {
+        "output_path": "./fab/"
+      },
+      "type": "folder"
+    },
+    {
+      "description": "JLCPCB",
+      "id": "5c739442-c5e5-4b2a-91ec-3737b5e6936b",
+      "only": [
+        "e427debd-0e61-4e8d-934b-928fc569bffe",
+        "2ff5fc43-7ad6-4695-aa64-aa51a75bba31"
+      ],
+      "settings": {
+        "format": "zip",
+        "output_path": "./fab/JLCPCB.zip"
+      },
+      "type": "archive"
+    }
+  ]
+}

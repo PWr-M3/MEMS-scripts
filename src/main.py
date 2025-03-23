@@ -1,42 +1,50 @@
 import argparse
 import logging
 import sane_logging
+import git
+import sys
+import pathlib
 
-from mems import bom, consolidate, utils, suppliers
+from mems import bom, consolidate, utils, variable, outputs
 from mems.library import library
 
 logger = logging.getLogger(__name__)
 
 
-def test(_):
-    print("test")
-
+def check_if_up_to_date():
+    repo = git.Repo(pathlib.Path(__file__).parent.parent)
+    if repo.is_dirty():
+        logger.error("Script repository is dirty. Exiting")
+        sys.exit(1)
+    remote = repo.head.reference.tracking_branch()
+    if not isinstance(remote, git.RemoteReference):
+        logger.error("Tracking branch not set for script repository. Exiting")
+    if remote != repo.head.reference: # type: ignore
+        logger.error("Script is not up to date. Pull data from origin")
+        sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(prog="MEMS Scripts")
     parser.add_argument(
         "-l", "--log", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], dest="log_level", default="INFO"
     )
-
     subparsers = parser.add_subparsers(required=True, help="Subcommand")
 
-    parser_test = subparsers.add_parser("test", help="Testing function, used for debugging")
-    parser_test.set_defaults(func=test)
-
-    parser_bom = subparsers.add_parser("bom", help="Generate bom and do bom checks")
-    bom.add_subparser(parser_bom)
-
-    parser_consolidate = subparsers.add_parser("consolidate", help="Consolidate component lists into a single list")
-    consolidate.add_subparser(parser_consolidate)
-
-    parser_library = subparsers.add_parser("library", help="Helper functions for library maintanance")
-    library.add_subparser(parser_library)
+    bom.add_subparser(subparsers)
+    consolidate.add_subparser(subparsers)
+    library.add_subparser(subparsers)
+    variable.add_subparser(subparsers)
+    outputs.add_subparser(subparsers)
 
     args = parser.parse_args()
+
 
     if logger.parent is not None:
         sane_logging.SaneLogging().terminal(args.log_level).file(utils.get_data_dir() / "logs").apply(logger.parent)
     logger.info("MEMS Scripts started")
+
+    if (args.log_level != "DEBUG"):
+        check_if_up_to_date()
 
     args.func(args)
 

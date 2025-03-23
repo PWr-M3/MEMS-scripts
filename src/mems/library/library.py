@@ -12,7 +12,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def add_subparser(parser: argparse.ArgumentParser):
+def add_subparser(subparsers):
+    parser = subparsers.add_parser("library", help="Helper functions for library maintanance")
+
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
     fill_parser = subparsers.add_parser(name="fill", help="Fills in missing fields in library")
     fill_parser.add_argument("path", help="Specifies path to symbol library file")

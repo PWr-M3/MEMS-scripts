@@ -12,7 +12,8 @@ def run(args):
     Consolidate(args).run()
 
 
-def add_subparser(parser: argparse.ArgumentParser):
+def add_subparser(subparsers):
+    parser = subparsers.add_parser("consolidate", help="Consolidate component lists into a single list")
     parser.add_argument(
         "-p",
         "--path",

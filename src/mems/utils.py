@@ -4,7 +4,8 @@ import pathlib
 import json
 import re
 import sys
-import math
+import logging
+import git
 from typing import List
 import xdg.BaseDirectory
 from pathlib import Path
@@ -15,13 +16,39 @@ from bs4 import BeautifulSoup
 
 LIBRARY_RESOURCE_NAME = "MEMS-scripts"
 
+logger = logging.getLogger(__name__)
 
-def get_main_sch():
-    cwd = os.getcwd()
-    path = pathlib.Path(cwd)
-    sch = path / f"{path.stem}.kicad_sch"
-    sch = sch.resolve()
-    return str(sch)
+
+def get_pro_filename() -> pathlib.Path | None:
+    cwd = pathlib.Path(os.getcwd())
+    pro_filename = next(cwd.rglob('*.kicad_pro'), None)
+    if pro_filename is None:
+        logger.error("Project file not found")
+        return
+    pro_filename = pro_filename.resolve()
+    return pro_filename
+
+def get_main_sch_filename():
+    pro_filename = get_pro_filename()
+    if pro_filename is None:
+        return None
+    sch_filename = pro_filename.with_suffix(".kicad_sch")
+    if os.path.exists(sch_filename):
+        return pro_filename
+    else:
+        logger.error("Main schematic file not found")
+        return None
+
+def get_main_pcb_filename():
+    pro_filename = get_pro_filename()
+    if pro_filename is None:
+        return None
+    pcb_filename = pro_filename.with_suffix(".kicad_pcb")
+    if os.path.exists(pcb_filename):
+        return pro_filename
+    else:
+        logger.error("PCB file not found")
+        return None
 
 
 def get_data_dir() -> Path:
@@ -67,6 +94,31 @@ def get_api_key():
         return config["api_key"]
 
     sys.exit(termcolor.colored('Error: No "api_key" found in config', "red"))
+
+def check_repo_clean(repo: git.Repo):
+    """Stops program if repo is not clean."""
+    if repo.is_dirty(untracked_files=True):
+        logger.error("Repository is dirty. Aborting. Commit all changes before proceeding.")
+        sys.exit(1)
+    logger.debug("Repo is clean. Proceeding")
+
+def set_text_variable(name: str, value: str):
+    pro = get_pro_filename()
+    if pro is None:
+        sys.exit(1)
+    with pro.open('r+') as pro_fp:
+
+        j = json.load(pro_fp)
+        variables = j.get("text_variables", None)
+        if variables is None:
+            j["text_variables"] = {}
+            variables = j["text_variables"]
+        variables[name] = value
+
+        pro_fp.seek(0)
+        json.dump(j, pro_fp, indent=2)
+        pro_fp.truncate()
+
 
 
 @dataclass
@@ -114,52 +166,6 @@ def search_lcsc(sku):
         prices.append(PriceRow(qty, unit_price))
 
     return LCSCItem(sku, qty_in_stock, prices)
-
-engineering_prefixes = {
-    "T": 12,
-    "G": 9,
-    "M": 6,
-    "k": 3,
-    "m": -3,
-    "u": -6,
-    "n": -9,
-    "p": -12,
-    "f": -15,
-    "a": -18,
-}
-
-
-def parse_engineering(parsed: str) -> float:
-    parsed = parsed.strip()
-    multiplier = 1.0
-    for prefix, exponent in engineering_prefixes.items():
-        if prefix in parsed:
-            multiplier = math.pow(10, exponent)
-            parsed = parsed.replace(prefix, ".")
-    value = float(parsed)
-    return value * multiplier
-
-
-def format_engineering(value: float, decimal_count: int = 2, as_separator: bool = False, unit: str | None = None) -> str:
-    if value == 0:
-        return "0" if unit is None else f"0{unit}"
-    exponent = math.floor(math.log10(value))
-    complete = math.floor(exponent // 3 * 3)
-    remainder = exponent % 3
-    if complete == 0:
-        if unit is not None:
-            prefix = unit
-        else:
-            prefix = ""
-    else:
-        prefix, _ = next(filter(lambda t: t[1] == complete, engineering_prefixes.items()))
-    number = round(value * math.pow(10, remainder - exponent), decimal_count)
-    if (number - math.floor(number)) > 1e-20:
-        if as_separator:
-            return f"{number}".replace(".", prefix).replace(",", prefix)  # Ugly solution
-        return f"{number}{prefix}"
-    return f"{int(number)}{prefix}"
-
 
 if __name__ == "__main__":
     # search_lcsc("C5252902")

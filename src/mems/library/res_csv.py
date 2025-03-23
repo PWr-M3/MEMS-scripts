@@ -5,8 +5,9 @@ import csv
 import kiutils.symbol
 import kiutils.utils
 
-from mems.library.lib_utils import check_repo_clean, get_lib_path, get_lib_repo, load_symbol_library
-from mems.utils import format_engineering
+from mems.library.lib_utils import get_lib_path, get_lib_repo, load_symbol_library
+from mems.utils import check_repo_clean
+from mems.engineering import format_engineering
 
 logger = logging.getLogger(__name__)
 

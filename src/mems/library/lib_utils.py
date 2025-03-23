@@ -29,14 +29,6 @@ def get_lib_repo() -> git.Repo:
     return git.Repo(path)
 
 
-def check_repo_clean(repo: git.Repo):
-    """Stops program if repo is not clean."""
-    if repo.is_dirty(untracked_files=True):
-        logger.error("Repository is dirty. Aborting. Commit all changes before proceeding.")
-        sys.exit(1)
-    logger.debug("Repo is clean. Proceeding")
-
-
 def commit_lib_repo(repo: git.Repo, message: str):
     """Commits all changes in the repo."""
     repo.git.add(all=True)
