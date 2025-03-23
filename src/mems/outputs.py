@@ -53,7 +53,7 @@ def generate_outputs(args):
 
         sys.exit(1)
 
-    ret_code = subprocess.Popen([
+    process = subprocess.Popen([
             "kicad-cli",
             "jobset",
             "run",
@@ -65,14 +65,16 @@ def generate_outputs(args):
         cwd=pro_file.parent,
         stdout=sys.stdout,
         stderr=sys.stderr,
-    ).communicate()
+    )
+    process.communicate()
 
-    if ret_code != 0:
+    print(process.returncode)
+    if process.returncode != 0:
         logger.error("Failed running jobset")
-        return ret_code
+        return process.returncode
 
     logger.info("Commiting created files")
-    repo.index.add(".")
+    repo.git.add(".")
     repo.index.commit(f"Relase of rev. {revision}")
 
     logger.warning("Remember to push new branch to origin")
