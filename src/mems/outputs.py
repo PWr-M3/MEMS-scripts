@@ -18,17 +18,22 @@ def add_subparser(subparsers):
     parser.set_defaults(func=generate_outputs)
 
 def set_sha(repo: git.Repo):
-    sha = repo.head.object.hexsha[:7]
+    sha = repo.head.object.hexsha[:7].upper()
     logger.info(f"Current HEAD SHA is: {sha}. Updating project variable")
     utils.set_text_variable("SHA", sha)
 
-def create_release_branch(repo: git.Repo, version: str):
+def create_release_branch(repo: git.Repo, version: str) -> git.Reference:
+    branch_name = f"release/{version}"
+    if branch_name in repo.heads:
+        logger.error("Release with this version already exists")
+        sys.exit(1)
     branch = repo.create_head(f"release/{version}")
     repo.head.reference = branch
     repo.head.reset(index=True, working_tree=True)
+    return branch
 
 def generate_outputs(args):
-    revision = args["revision"]
+    revision = args.revision
 
     repo = git.Repo(os.getcwd())
 
@@ -45,6 +50,7 @@ def generate_outputs(args):
     jobfile = (pathlib.Path(__file__).parent.parent.parent / JOBSET_FILENAME).resolve()
     pro_file = utils.get_pro_filename()
     if pro_file is None:
+
         sys.exit(1)
 
     ret_code = subprocess.Popen([

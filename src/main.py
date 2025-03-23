@@ -14,13 +14,13 @@ logger = logging.getLogger(__name__)
 def check_if_up_to_date():
     repo = git.Repo(pathlib.Path(__file__).parent.parent)
     if repo.is_dirty():
-        logger.error("Script repository is dirty. Exiting")
+        logger.error("Script repository is dirty. Exiting. Check is ignored with '-l DEBUG'.")
         sys.exit(1)
     remote = repo.head.reference.tracking_branch()
     if not isinstance(remote, git.RemoteReference):
-        logger.error("Tracking branch not set for script repository. Exiting")
-    if remote != repo.head.reference: # type: ignore
-        logger.error("Script is not up to date. Pull data from origin")
+        logger.error("Tracking branch not set for script repository. Exiting. Check is ignored with '-l DEBUG'.")
+    if remote.commit != repo.head.commit: # type: ignore
+        logger.error("Script is not up to date. Pull data from origin. Check is ignored with '-l DEBUG'.")
         sys.exit(1)
 
 def main():

@@ -11,7 +11,7 @@ def add_subparser(subparsers):
     parser.set_defaults(func=utils.set_text_variable)
 
 def set_text_variable(args):
-    name = args["name"]
-    value = args["value"]
+    name = args.name
+    value = args.value
     utils.set_text_variable(name, value)
 
