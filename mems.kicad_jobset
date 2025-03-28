@@ -59,7 +59,7 @@
         "description": "",
         "disable_aperture_macros": false,
         "drawing_sheet": "",
-        "include_netlist_attributes": true,
+        "include_netlist_attributes": false,
         "layers": [
           "F.Cu",
           "In1.Cu",
@@ -114,7 +114,7 @@
         "subtract_solder_mask_from_silk": true,
         "use_drill_origin": false,
         "use_protel_file_extension": true,
-        "use_x2_format": true
+        "use_x2_format": false
       },
       "type": "pcb_export_gerbers"
     },
