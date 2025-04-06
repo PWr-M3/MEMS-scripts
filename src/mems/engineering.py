@@ -43,12 +43,17 @@ def parse_engineering_with_unit(parsed: str) -> tuple[float, str]:
     )
 
 
-def format_engineering(value: float, decimal_count: int = 2, as_separator: bool = False) -> str:
-    exponent = math.floor(math.log10(value))
-    complete = math.floor(exponent // 3 * 3)
-    remainder = exponent % 3
+def format_engineering(value: float, decimal_count: int = 2, as_separator: bool = False, unit: str = "") -> str:
+    if value == 0:
+        exponent = 0
+        complete = 0
+        remainder = 0
+    else:
+        exponent = math.floor(math.log10(value))
+        complete = math.floor(exponent // 3 * 3)
+        remainder = exponent % 3
     if complete == 0:
-        prefix = ""
+        prefix = unit
     else:
         prefix, _ = next(filter(lambda t: t[1] == complete, engineering_prefixes.items()))
     number = round(value * math.pow(10, remainder - exponent), decimal_count)
