@@ -5,6 +5,7 @@ import sys
 import git
 import os
 import datetime
+from importlib import resources
 
 from mems import utils
 
@@ -32,6 +33,34 @@ def create_release_branch(repo: git.Repo, version: str) -> git.Reference:
     repo.head.reset(index=True, working_tree=True)
     return branch
 
+def run_jobset():
+    pro_file = utils.get_pro_filename()
+    if pro_file is None:
+        sys.exit(1)
+
+    with resources.as_file(resources.files("mems.data")) as path:
+        path = pathlib.Path(path)
+
+        process = subprocess.Popen([
+                "kicad-cli",
+                "jobset",
+                "run",
+                "--stop-on-error",
+                "-f",
+                str(path / "outputs.kicad_jobset"),
+                pro_file
+            ],
+            cwd=pro_file.parent,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+        process.communicate()
+
+        if process.returncode != 0:
+            logger.error("Failed running jobset")
+            return process.returncode
+
+
 def generate_outputs(args):
     revision = args.revision
 
@@ -47,31 +76,9 @@ def generate_outputs(args):
     utils.set_text_variable("date", datetime.datetime.now().strftime("%Y-%m-%d"))
 
     logger.info("Running jobs")
-    jobfile = (pathlib.Path(__file__).parent.parent.parent / JOBSET_FILENAME).resolve()
-    pro_file = utils.get_pro_filename()
-    if pro_file is None:
-
-        sys.exit(1)
-
-    process = subprocess.Popen([
-            "kicad-cli",
-            "jobset",
-            "run",
-            "--stop-on-error",
-            "-f",
-            jobfile,
-            pro_file
-        ],
-        cwd=pro_file.parent,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-    )
-    process.communicate()
-
-    print(process.returncode)
-    if process.returncode != 0:
-        logger.error("Failed running jobset")
-        return process.returncode
+    ret = run_jobset()
+    if ret != 0:
+        sys.exit()
 
     logger.info("Commiting created files")
     repo.git.add(".")

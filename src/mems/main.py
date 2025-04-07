@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def check_if_up_to_date():
-    repo = git.Repo(pathlib.Path(__file__).parent.parent)
+    repo = git.Repo(pathlib.Path(__file__), search_parent_directories=True)
     if repo.is_dirty():
         logger.error("Script repository is dirty. Exiting. Check is ignored with '-l DEBUG'.")
         sys.exit(1)

@@ -1,12 +1,16 @@
 [build-system]
-requires = ["setuptools >= 65", "wheel >= 0.38"]
+requires = ["setuptools >= 78"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mems"
 version = "0.1.0"
-dependencies = ["colorama==0.4.6", "kiutils @ git+https://github.com/antmicro/kiutils.git@main", "termcolor==2.2.0", "requests==2.28.2", "BeautifulSoup4==4.12.3", "GitPython==3.1.43", "pyxdg==0.28", "sane_logging @ git+https://github.com/JJendryka/sane_logging.git"]
-scripts = {mems = "main:main"}
+dependencies = ["colorama", "kiutils @ git+https://github.com/antmicro/kiutils.git@main", "termcolor", "requests", "BeautifulSoup4", "GitPython", "pyxdg", "sane_logging @ git+https://github.com/JJendryka/sane_logging.git"]
+scripts = {mems = "mems.main:main"}
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [project.optional-dependencies]
 dev = ["mypy", "ruff", "black"]
@@ -14,7 +18,6 @@ dev = ["mypy", "ruff", "black"]
 [tool.ruff]
 select = ["E", "F", "N", "B", "A", "RET"]
 line-length = 120
-target-version = "py38"
 
 [tool.black]
 line-length = 120

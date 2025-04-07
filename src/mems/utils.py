@@ -9,10 +9,11 @@ import git
 from typing import List
 import xdg.BaseDirectory
 from pathlib import Path
-
 import termcolor
 import requests
 from bs4 import BeautifulSoup
+from importlib import resources
+import shutil
 
 LIBRARY_RESOURCE_NAME = "MEMS-scripts"
 
@@ -57,19 +58,24 @@ def get_data_dir() -> Path:
 
 
 def get_config():
-    file_path = os.path.realpath(__file__)
-    dir_path = pathlib.Path(file_path).parent
-    config_path = dir_path.parent.parent / "config.json"
-    if os.path.exists(config_path):
-        with open(config_path) as fp:
-            try:
-                j = json.load(fp)
-            except:
-                sys.exit(termcolor.colored("Error: Couldn't parse config file", "red"))
-    else:
-        sys.exit(termcolor.colored("Error: Config file doesn't exist", "red"))
+    config_path = get_data_dir() / "config.json"
+    if not os.path.exists(config_path):
+        traversable = resources.files("mems.data")
+        with resources.as_file(traversable) as path:
+            path = Path(path)
+            shutil.copy(path / "config.json.template", config_path)
 
-    return j
+        logger.error(f"Error: Config file doesn't exist. Copying template to: {config_path}")
+        sys.exit(1)
+
+    with open(config_path) as config_file:
+        try:
+            config_json = json.load(config_file)
+        except:
+            logger.error(f"Couldn't parse config file: {config_path}. Fix the errors or delete the file to reinitialize")
+            sys.exit(1)
+
+    return config_json
 
 
 def search_mouser(val):
