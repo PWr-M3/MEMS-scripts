@@ -44,10 +44,3 @@ def run(args: argparse.Namespace):
         cap_csv.regenerate()
     if args.subcommand == "res_csv":
         res_csv.regenerate()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    add_subparser(parser)
-    args = parser.parse_args()
-    run(args)

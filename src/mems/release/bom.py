@@ -1,5 +1,4 @@
 from abc import abstractmethod, ABC
-import argparse
 import os
 import sys
 import subprocess
@@ -8,12 +7,12 @@ from typing import Tuple, List, Dict
 import pathlib
 import csv
 import copy
-import colorama
-import termcolor
 import time
 from mems import utils
+import logging
 
-TEMPFILE_NAME = "temp.xml"
+
+logger = logging.getLogger(__name__)
 
 
 class Component:
@@ -80,7 +79,7 @@ class MouserSupplier(Supplier, name="Mouser"):
             ]
         )
         for component in self.components:
-            print(f"Searching Mouser for {component.sku}")
+            logger.info(f"Searching Mouser for {component.sku}")
             response = utils.search_mouser(component.sku)
             while len(response["Errors"]) > 0:
                 time.sleep(2)
@@ -88,7 +87,7 @@ class MouserSupplier(Supplier, name="Mouser"):
 
             part = self.find_matching_part(response, component.sku)
             if part is not None:
-                print("Found")
+                logger.info("Found")
                 stock = self.get_availability(part)
                 price = self.mouser_get_price(part, component.quantity)
                 if price is not None:
@@ -99,7 +98,7 @@ class MouserSupplier(Supplier, name="Mouser"):
                 if stock is not None and stock >= int(component.quantity):
                     available = True
                 else:
-                    print(termcolor.colored("Error: Not enough in stock", "red"))
+                    logger.error("Not enough in stock")
                     available = False
 
                 csvwriter.writerow(
@@ -114,7 +113,7 @@ class MouserSupplier(Supplier, name="Mouser"):
                     ]
                 )
             else:
-                print(termcolor.colored("Error: Not found", "red"))
+                logger.error("Not found")
 
     @staticmethod
     def find_matching_part(response, sku):
@@ -181,18 +180,18 @@ class LCSCSupplier(Supplier, name="LCSC"):
             ]
         )
         for component in self.components:
-            print(f"Searching LCSC for {component.sku}")
+            logger.info(f"Searching LCSC for {component.sku}")
             part = utils.search_lcsc(component.sku)
             if part is None:
-                print(termcolor.colored("Error: Not found", "red"))
+                logger.error("Not found")
                 continue
 
-            print("Found")
+            logger.info("Found")
             price = part.get_price(component.quantity)
             cost = price * component.quantity
             available = part.in_stock_qty >= component.quantity
             if not available:
-                print(termcolor.colored("Error: Not enough in stock", "red"))
+                logger.error("Not enough in stock")
 
             csvwriter.writerow(
                 [
@@ -210,44 +209,29 @@ class LCSCSupplier(Supplier, name="LCSC"):
 
 def add_subparser(subparsers):
     parser = subparsers.add_parser("bom", help="Generate BOM and execute BOM checks")
-    parser.add_argument(
-        "-a",
-        "--available",
-        dest="available",
-        action="store_true",
-        help="Run a check for part availability",
-    )
-    parser.add_argument(
-        "-p",
-        "--path",
-        dest="path",
-        help="Specifies path to main schematic file",
-    )
-    parser.add_argument("-g", "--generate", dest="suppliers", choices=SUPPLIERS, nargs="*")
-    parser.add_argument(
-        "--no-mpn",
-        dest="no_mpn",
-        action="store_true",
-        help="Override ignoring components without mpn for bom generation",
-    )
     parser.set_defaults(func=run)
 
 
-def run(args):
-    BOM(args).run()
+def run():
+    BOM().run()
+
+def get_filename():
+    filename = utils.get_pro_filename()
+    if filename is None:
+        logger.error("No project file found")
+        sys.exit(0)
+    filename = filename.parent / "fab" / "bom" / "temp.xml"
+    return str(filename)
 
 
 class BOM:
-    def __init__(self, args) -> None:
-        self.args = args
-        self.path = self.get_path()
+    def __init__(self) -> None:
+        self.path = utils.get_main_sch_filename()
         self.components: list[Component] = []
         self.grouped_components: dict[str, ComponentGroup] = {}
         self.has_errored = False
 
     def run(self):
-        colorama.just_fix_windows_console()
-
         self.generate_xml_bom()
         components = self.parse_xml()
         self.verify_components(components)
@@ -255,43 +239,22 @@ class BOM:
         components = self.handle_misc_components(components)
         grouped_components = self.group_components(components)
 
-        suppliers = ["Lab"]
-        if self.args.suppliers is not None:
-            suppliers += self.args.suppliers
-            self.generate_csv_boms(grouped_components, suppliers)
+        suppliers = ["Mouser", "TME", "LCSC"]
+        self.generate_csv_boms(grouped_components, suppliers)
 
         self.remove_temp_xml()
         if self.has_errored:
-            sys.exit(termcolor.colored("There were issues found", "red"))
+            logger.error("There were issues found")
         else:
-            print("OK!")
-            sys.exit()
+            logger.info("OK!")
+
 
     def error(self, text):
-        print(termcolor.colored("Error: " + text, "red"))
+        logger.error(text)
         self.has_errored = True
 
-    def get_path(self):
-        path = utils.get_main_sch_filename()
-        if path is None:
-            sys.exit(1)
-        if os.path.exists(path) and self.args.path is None:
-            pass
-        elif not os.path.exists(path) and self.args.path is None:
-            sys.exit(
-                termcolor.colored(
-                    f"Error: Default filename doesn't exist ({path}) and alternative wasn't specified",
-                    "red",
-                )
-            )
-        elif self.args.path is not None and not os.path.exists(self.args.path):
-            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.path}", "red"))
-        else:
-            path = self.args.path
-        return path
-
     def generate_xml_bom(self):
-        print("Generating BOM using kicad-cli")
+        logger.info(f"Generating BOM using kicad-cli from {self.path}")
         process = subprocess.Popen(
             [
                 "kicad-cli",
@@ -299,16 +262,17 @@ class BOM:
                 "export",
                 "python-bom",
                 "-o",
-                TEMPFILE_NAME,
-                self.path,
+                get_filename(),
+                str(self.path),
             ],
-            stdout=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         process.wait()
 
     def parse_xml(self):
-        print("Parsing the XML BOM")
-        tree = ET.parse(TEMPFILE_NAME)
+        logger.info("Parsing the XML BOM")
+        tree = ET.parse(get_filename())
         root = tree.getroot()
         components = root.find("components")
         if components is None:
@@ -343,7 +307,7 @@ class BOM:
         return None
 
     def verify_components(self, components: List[Component]):
-        print("Veryfing components")
+        logger.info("Veryfing components")
         for component in components:
             prefix = "".join(char for char in component.reference if not char.isdigit())
             # Check if component doesn't have mpn and is not excluded from having one mandatory
@@ -385,7 +349,6 @@ class BOM:
                 new_component.skus = {supplier: sku}
 
                 out_components.append(new_component)
-                print(new_component.mpn, new_component.skus)
 
         return out_components
 
@@ -402,7 +365,7 @@ class BOM:
         return components
 
     def group_components(self, components: List[Component]) -> Dict[str, ComponentGroup]:
-        print("Grouping components")
+        logger.info("Grouping components")
         grouped_components = {}
         for component in components:
             if component.mpn is None:
@@ -417,7 +380,7 @@ class BOM:
         return grouped_components
 
     def generate_csv_boms(self, grouped_components: Dict[str, ComponentGroup], suppliers: List[str]) -> None:
-        print("Generating CSV BOMS")
+        logger.info("Generating CSV BOMS")
         pathlib.Path("bom").mkdir(parents=True, exist_ok=True)
 
         boms: Dict[str, Supplier] = {name: SUPPLIERS[name]() for name in suppliers}
@@ -445,17 +408,16 @@ class BOM:
         if len(no_supplier_mpns) > 0:
             self.error(f"There were {str(len(no_supplier_mpns))} components without supplier ({no_supplier_mpns})")
 
+        project_filename = utils.get_pro_filename()
+        if project_filename is None:
+            logger.error("No project file found")
+            sys.exit(1)
+        path = project_filename.parent / "fab" / "bom"
+        path.mkdir(parents=True, exist_ok=True)
         for name, bom in boms.items():
-            with open((pathlib.Path("./bom") / (name + ".csv")), "w+", newline="") as csvfile:
+            with open((path / (name + ".csv")), "w+", newline="") as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=";", quotechar='"')
                 bom.write_csv(csvwriter)
 
     def remove_temp_xml(self):
-        os.remove(TEMPFILE_NAME)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    add_subparser(parser)
-    args = parser.parse_args()
-    run(args)
+        os.remove(get_filename())

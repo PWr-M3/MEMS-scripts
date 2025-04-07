@@ -35,7 +35,7 @@ def get_main_sch_filename():
         return None
     sch_filename = pro_filename.with_suffix(".kicad_sch")
     if os.path.exists(sch_filename):
-        return pro_filename
+        return sch_filename
     else:
         logger.error("Main schematic file not found")
         return None
@@ -46,7 +46,7 @@ def get_main_pcb_filename():
         return None
     pcb_filename = pro_filename.with_suffix(".kicad_pcb")
     if os.path.exists(pcb_filename):
-        return pro_filename
+        return pcb_filename
     else:
         logger.error("PCB file not found")
         return None
@@ -167,8 +167,8 @@ def search_lcsc(sku):
     price_table = soup.find(string=re.compile("Qty.*")).find_parent("table").tbody
     for row in price_table:
         tds = row.find_all("td")
-        qty = int(re.findall("\d+", tds[0].string.strip())[0])
-        unit_price = float(re.findall("\d+\.\d+", tds[1].span.string.strip())[0])
+        qty = int(re.findall(r"\d+", tds[0].string.strip())[0])
+        unit_price = float(re.findall(r"\d+\.\d+", tds[1].span.string.strip())[0])
         prices.append(PriceRow(qty, unit_price))
 
     return LCSCItem(sku, qty_in_stock, prices)

@@ -13,14 +13,7 @@ requires-python = ">=3.11"
 where = ["src"]
 
 [project.optional-dependencies]
-dev = ["mypy", "ruff", "black"]
+dev = ["pyright", "ruff"]
 
 [tool.ruff]
-select = ["E", "F", "N", "B", "A", "RET"]
 line-length = 120
-
-[tool.black]
-line-length = 120
-
-[tool.mypy]
-ignore_missing_imports = true

@@ -5,7 +5,8 @@ import git
 import sys
 import pathlib
 
-from mems import bom, consolidate, utils, variable, outputs
+from mems import consolidate, utils
+from mems.release import release
 from mems.library import library
 
 logger = logging.getLogger(__name__)
@@ -30,14 +31,11 @@ def main():
     )
     subparsers = parser.add_subparsers(required=True, help="Subcommand")
 
-    bom.add_subparser(subparsers)
     consolidate.add_subparser(subparsers)
     library.add_subparser(subparsers)
-    variable.add_subparser(subparsers)
-    outputs.add_subparser(subparsers)
+    release.add_subparser(subparsers)
 
     args = parser.parse_args()
-
 
     if logger.parent is not None:
         sane_logging.SaneLogging().terminal(args.log_level).file(utils.get_data_dir() / "logs").apply(logger.parent)

@@ -1,0 +1,31 @@
+{
+  "jobs": [
+    {
+      "description": "",
+      "id": "568af68e-eb61-400b-88eb-38e466db9b59",
+      "settings": {
+        "description": "",
+        "fail_on_error": true,
+        "format": "report",
+        "output_filename": "./ERC.txt",
+        "severity": 48,
+        "units": "mm"
+      },
+      "type": "sch_erc"
+    }
+  ],
+  "meta": {
+    "version": 1
+  },
+  "outputs": [
+    {
+      "description": "",
+      "id": "c3293b7b-b7d1-45c1-a9af-ada10b652331",
+      "only": [],
+      "settings": {
+        "output_path": "./fab"
+      },
+      "type": "folder"
+    }
+  ]
+}

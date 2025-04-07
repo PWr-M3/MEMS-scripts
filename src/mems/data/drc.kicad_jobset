@@ -1,0 +1,33 @@
+{
+  "jobs": [
+    {
+      "description": "",
+      "id": "17934905-d24e-449b-b59c-1e8627196863",
+      "settings": {
+        "description": "",
+        "fail_on_error": true,
+        "format": "report",
+        "output_filename": "./DRC.txt",
+        "parity": true,
+        "report_all_track_errors": false,
+        "severity": 48,
+        "units": "mm"
+      },
+      "type": "pcb_drc"
+    }
+  ],
+  "meta": {
+    "version": 1
+  },
+  "outputs": [
+    {
+      "description": "",
+      "id": "0244119f-7672-4f71-a39b-b0cc7d7dc9f2",
+      "only": [],
+      "settings": {
+        "output_path": "./fab"
+      },
+      "type": "folder"
+    }
+  ]
+}
