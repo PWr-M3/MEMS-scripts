@@ -212,7 +212,7 @@ def add_subparser(subparsers):
     parser.set_defaults(func=run)
 
 
-def run():
+def run(_ = None):
     BOM().run()
 
 def get_filename():

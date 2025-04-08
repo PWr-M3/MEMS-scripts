@@ -1,12 +1,13 @@
+import datetime
 import logging
+import os
+import pathlib
 import shutil
 import subprocess
-import pathlib
 import sys
-import git
-import os
-import datetime
 from importlib import resources
+
+import git
 
 from mems import utils
 from mems.release import bom
