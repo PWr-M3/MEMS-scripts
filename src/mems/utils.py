@@ -162,17 +162,29 @@ def search_lcsc(sku):
     if "Search by " in soup.title.string:
         return None
 
-    qty_in_stock = int(soup.find("div", string=re.compile("In Stock:.*")).text.split(":")[1].strip())
+    try:
+        qty_in_stock = int(soup.find("div", string=re.compile("In-Stock:.*")).text.split(":")[1].strip())
+    except AttributeError:
+        logger.error(f"Could not check availability")
+        qty_in_stock = 0
+
     prices = list()
-    price_table = soup.find(string=re.compile("Qty.*")).find_parent("table").tbody
-    for row in price_table:
-        tds = row.find_all("td")
-        qty = int(re.findall(r"\d+", tds[0].string.strip())[0])
-        unit_price = float(re.findall(r"\d+\.\d+", tds[1].span.string.strip())[0])
-        prices.append(PriceRow(qty, unit_price))
+    try:
+        price_table = soup.find(string=re.compile("Qty.*")).find_parent("table").tbody
+        for row in price_table:
+            tds = row.find_all("td")
+            qty = int(re.findall(r"\d+", tds[0].string.strip())[0])
+            unit_price = float(re.findall(r"\d+\.\d+", tds[1].span.string.strip())[0])
+            prices.append(PriceRow(qty, unit_price))
+    except AttributeError:
+        logger.error(f"Could not check prices")
+        prices.append(PriceRow(0, 0))
+        
+
+    
+    
 
     return LCSCItem(sku, qty_in_stock, prices)
 
 if __name__ == "__main__":
-    # search_lcsc("C5252902")
-    search_lcsc("ala")
+    search_lcsc("C97095")
