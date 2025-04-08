@@ -381,7 +381,6 @@ class BOM:
 
     def generate_csv_boms(self, grouped_components: Dict[str, ComponentGroup], suppliers: List[str]) -> None:
         logger.info("Generating CSV BOMS")
-        pathlib.Path("bom").mkdir(parents=True, exist_ok=True)
 
         boms: Dict[str, Supplier] = {name: SUPPLIERS[name]() for name in suppliers}
         no_supplier_mpns: List[str] = []
