@@ -59,7 +59,7 @@ def set_variables(revision: str):
 def set_sha(repo: git.Repo):
     sha = repo.head.object.hexsha[:7].upper()
     logger.info(f"Current HEAD SHA is: {sha}. Updating project variable")
-    utils.set_text_variable("SHA", sha)
+    utils.set_text_variable("sha", sha)
 
 
 def check(clean=True):
