@@ -337,7 +337,7 @@ class BOM:
             skus: List[Tuple[str, str]] = []
             for supplier, supplier_skus in component.skus.items():
                 for sku in supplier_skus.strip().split("+"):
-                    skus.append((supplier, sku))
+                    skus.append((supplier, sku.strip()))
 
             if len(skus) != len(mpns):
                 self.error(f"Element count in SKU and MPN not equal for {component.mpn}. Ignoring this component")
@@ -345,7 +345,7 @@ class BOM:
 
             for index, (supplier, sku) in enumerate(skus):
                 new_component = copy.deepcopy(component)
-                new_component.mpn = f"Multipart {index + 1}/{len(skus)}: {mpns}"
+                new_component.mpn = f"{sku} from Multipart: {mpns}"
                 new_component.skus = {supplier: sku}
 
                 out_components.append(new_component)
