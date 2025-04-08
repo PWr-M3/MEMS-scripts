@@ -52,7 +52,7 @@ def create_resistor_from_row(row: dict) -> kiutils.symbol.Symbol:
     template_name = "R"
 
     description = (
-        f"{format_engineering(float(row['Value scientific [Ohm]:']))}Ω capacitor"
+        f"{format_engineering(float(row['Value scientific [Ohm]:']))}Ω resistor"
         f", {float(row['Tolerance [%]:'])}%"
         f", {float(row['Power [W]:'])*1000}mW"
         f", {str(row['TempCo [ppm]:'])+"ppm" if row['TempCo [ppm]:'] else ''}"
