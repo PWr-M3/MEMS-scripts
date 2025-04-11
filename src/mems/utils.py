@@ -123,14 +123,15 @@ def set_pro_json(j):
     with pro.open('w') as pro_fp:
         json.dump(j, pro_fp, indent=2)
 
-def set_text_variable(name: str, value: str):
+def set_text_variable(name: str, value: str, override: bool = True):
     j = get_pro_json()
     variables = j.get("text_variables", None)
     if variables is None:
         j["text_variables"] = {}
         variables = j["text_variables"]
-    variables[name] = value
-    set_pro_json(j)
+    if name not in variables or override:
+        variables[name] = value
+        set_pro_json(j)
 
 
 @dataclass
