@@ -97,7 +97,7 @@
       "only": [],
       "settings": {
         "format": "zip",
-        "output_path": "./fab/${title}-JLCPCB.zip"
+        "output_path": "./fab/${title}-${rev}-JLCPCB.zip"
       },
       "type": "archive"
     }
