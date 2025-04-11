@@ -108,23 +108,29 @@ def check_repo_clean(repo: git.Repo):
         sys.exit(1)
     logger.debug("Repo is clean. Proceeding")
 
-def set_text_variable(name: str, value: str):
+def get_pro_json():
     pro = get_pro_filename()
     if pro is None:
         sys.exit(1)
     with pro.open('r+') as pro_fp:
-
         j = json.load(pro_fp)
-        variables = j.get("text_variables", None)
-        if variables is None:
-            j["text_variables"] = {}
-            variables = j["text_variables"]
-        variables[name] = value
+    return j
 
-        pro_fp.seek(0)
+def set_pro_json(j):
+    pro = get_pro_filename()
+    if pro is None:
+        sys.exit(1)
+    with pro.open('w') as pro_fp:
         json.dump(j, pro_fp, indent=2)
-        pro_fp.truncate()
 
+def set_text_variable(name: str, value: str):
+    j = get_pro_json()
+    variables = j.get("text_variables", None)
+    if variables is None:
+        j["text_variables"] = {}
+        variables = j["text_variables"]
+    variables[name] = value
+    set_pro_json(j)
 
 
 @dataclass

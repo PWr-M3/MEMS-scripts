@@ -8,6 +8,7 @@ import pathlib
 from mems import consolidate, utils
 from mems.release import release
 from mems.library import library
+from mems import templates
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ def main():
     consolidate.add_subparser(subparsers)
     library.add_subparser(subparsers)
     release.add_subparser(subparsers)
+    templates.add_subparser(subparsers)
 
     args = parser.parse_args()
 
