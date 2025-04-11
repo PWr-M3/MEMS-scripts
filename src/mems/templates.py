@@ -25,21 +25,20 @@ def add_subparser(subparsers):
     parser.set_defaults(func=run)
 
 def run(args) -> None:
-    pro_json = get_pro_json()
     if args.subcommand == "layers" or args.subcommand == "all":
-        add_layer_presets(pro_json)
+        add_layer_presets()
     if args.subcommand == "tracks" or args.subcommand == "all":
-        add_tracks(pro_json)
+        add_tracks()
     if args.subcommand == "vias" or args.subcommand == "all":
-        add_vias(pro_json)
+        add_vias()
     if args.subcommand == "gitignore" or args.subcommand == "all":
         add_gitignore()
     if args.subcommand == "variables" or args.subcommand == "all":
         add_variables()
-    set_pro_json(pro_json)
 
 
-def add_layer_presets(pro_json):
+def add_layer_presets():
+    pro_json = get_pro_json()
     if "layer_presets" not in pro_json["board"]:
         logger.debug("No layer_presets in .kicad_pro. Adding")
         pro_json["board"]["layer_presets"] = []
@@ -54,18 +53,28 @@ def add_layer_presets(pro_json):
         else:
             logger.debug(f"Adding new preset: {template["name"]}")
             pro_presets.append(template)
+    set_pro_json(pro_json)
 
-def add_tracks(pro_json):
-    pro_json["board"]["track_widths"] = [
+def add_tracks():
+    pro_json = get_pro_json()
+    pro_json["board"]["design_settings"]["track_widths"] = [
+        0.0,
         0.13,
         0.2,
         0.3,
         0.5,
         1
     ]
+    set_pro_json(pro_json)
 
-def add_vias(pro_json):
-    pro_json["board"]["via_dimensions"] = [
+def add_vias():
+    pro_json = get_pro_json()
+    pro_json["board"]["design_settings"]["via_dimensions"] = [
+        {
+            "diameter": 0.0,
+            "drill": 0.0
+        },
+
         {
             "diameter": 0.45,
             "drill": 0.3
@@ -79,6 +88,7 @@ def add_vias(pro_json):
             "drill": 0.8
         }
     ]
+    set_pro_json(pro_json)
 
 def add_gitignore():
     pro = get_pro_filename()

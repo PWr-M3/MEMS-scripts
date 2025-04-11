@@ -129,7 +129,7 @@ def set_text_variable(name: str, value: str, override: bool = True):
     if variables is None:
         j["text_variables"] = {}
         variables = j["text_variables"]
-    if name not in variables or override:
+    if (name not in variables) or override:
         variables[name] = value
         set_pro_json(j)
 
