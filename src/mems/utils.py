@@ -155,6 +155,7 @@ class LCSCItem:
     prices: List[PriceRow]
 
     def get_price(self, qty):
+        price = self.prices[0].unit_price
         for row in self.prices:
             if row.moq <= qty:
                 price = row.unit_price
