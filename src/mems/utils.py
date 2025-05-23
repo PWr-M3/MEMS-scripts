@@ -11,7 +11,7 @@ import xdg.BaseDirectory
 from pathlib import Path
 import termcolor
 import requests
-from bs4 import BeautifulSoup
+import bs4
 from importlib import resources
 import shutil
 
@@ -22,12 +22,13 @@ logger = logging.getLogger(__name__)
 
 def get_pro_filename() -> pathlib.Path | None:
     cwd = pathlib.Path(os.getcwd())
-    pro_filename = next(cwd.rglob('*.kicad_pro'), None)
+    pro_filename = next(cwd.rglob("*.kicad_pro"), None)
     if pro_filename is None:
         logger.error("Project file not found")
         return
     pro_filename = pro_filename.resolve()
     return pro_filename
+
 
 def get_main_sch_filename():
     pro_filename = get_pro_filename()
@@ -39,6 +40,7 @@ def get_main_sch_filename():
     else:
         logger.error("Main schematic file not found")
         return None
+
 
 def get_main_pcb_filename():
     pro_filename = get_pro_filename()
@@ -72,7 +74,9 @@ def get_config():
         try:
             config_json = json.load(config_file)
         except:
-            logger.error(f"Couldn't parse config file: {config_path}. Fix the errors or delete the file to reinitialize")
+            logger.error(
+                f"Couldn't parse config file: {config_path}. Fix the errors or delete the file to reinitialize"
+            )
             sys.exit(1)
 
     return config_json
@@ -101,6 +105,7 @@ def get_api_key():
 
     sys.exit(termcolor.colored('Error: No "api_key" found in config', "red"))
 
+
 def check_repo_clean(repo: git.Repo):
     """Stops program if repo is not clean."""
     if repo.is_dirty(untracked_files=True):
@@ -108,20 +113,23 @@ def check_repo_clean(repo: git.Repo):
         sys.exit(1)
     logger.debug("Repo is clean. Proceeding")
 
+
 def get_pro_json():
     pro = get_pro_filename()
     if pro is None:
         sys.exit(1)
-    with pro.open('r+') as pro_fp:
+    with pro.open("r+") as pro_fp:
         j = json.load(pro_fp)
     return j
+
 
 def set_pro_json(j):
     pro = get_pro_filename()
     if pro is None:
         sys.exit(1)
-    with pro.open('w') as pro_fp:
+    with pro.open("w") as pro_fp:
         json.dump(j, pro_fp, indent=2)
+
 
 def set_text_variable(name: str, value: str, override: bool = True):
     j = get_pro_json()
@@ -164,34 +172,41 @@ def search_lcsc(sku):
             "Accept-Encoding": "gzip, deflate, br",
         },
     )
-    soup = BeautifulSoup(r.content, "html.parser")
+    soup = bs4.BeautifulSoup(r.content, "html.parser")
 
     if "Search by " in soup.title.string:
         return None
 
     try:
-        qty_in_stock = int(soup.find("div", string=re.compile("In-Stock:.*")).text.split(":")[1].strip())
-    except AttributeError:
-        logger.error(f"Could not check availability")
+        qty_in_stock = int(
+            soup.find("span", string=re.compile("In-Stock:.*")).text.split(":")[1].strip().replace(",", "")
+        )
+    except AttributeError as e:
+        logger.error(f"Could not check availability. {e}")
         qty_in_stock = 0
 
     prices = list()
     try:
         price_table = soup.find(string=re.compile("Qty.*")).find_parent("table").tbody
         for row in price_table:
+            if not isinstance(row, bs4.element.Tag):
+                continue
+
             tds = row.find_all("td")
-            qty = int(re.findall(r"\d+", tds[0].string.strip())[0])
+            if len(tds) < 2:
+                continue
+
+            qty = int(re.findall(r"\d+,?\d*", tds[0].string.strip())[0].replace(",", ""))
             unit_price = float(re.findall(r"\d+\.\d+", tds[1].span.string.strip())[0])
             prices.append(PriceRow(qty, unit_price))
-    except AttributeError:
-        logger.error(f"Could not check prices")
-        prices.append(PriceRow(0, 0))
-        
 
-    
-    
+    except AttributeError as e:
+        logger.error(f"Could not check prices. {e}")
+        prices.append(PriceRow(0, 0))
 
     return LCSCItem(sku, qty_in_stock, prices)
 
+
 if __name__ == "__main__":
-    search_lcsc("C97095")
+    item = search_lcsc("C97095")
+    print(item)
