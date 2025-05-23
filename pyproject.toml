@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mems"
 version = "0.1.0"
-dependencies = ["colorama", "kiutils @ git+https://github.com/antmicro/kiutils.git@main", "termcolor", "requests", "BeautifulSoup4", "GitPython", "pyxdg", "sane_logging @ git+https://github.com/JJendryka/sane_logging.git"]
+dependencies = ["colorama", "kiutils @ git+https://github.com/antmicro/kiutils.git@main", "termcolor", "requests", "numpy", "BeautifulSoup4", "GitPython", "pyxdg", "sane_logging @ git+https://github.com/JJendryka/sane_logging.git"]
 scripts = {mems = "mems.main:main"}
 requires-python = ">=3.11"
 
