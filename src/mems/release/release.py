@@ -144,6 +144,14 @@ def create_release_branch(repo: git.Repo, release_branch_name: str) -> git.Refer
     repo.head.reset(index=True, working_tree=True)
     return branch
 
+def prompt_delete_existing_release_branch(repo: git.Repo, release_branch_name: str):
+    if release_branch_name in repo.heads:
+        logger.info(f"Release branch {release_branch_name} already exists")
+        user_response = input(f"Do you want to DELETE {release_branch_name} branch? (y/n): ")
+        if user_response.lower() == 'y':
+            logger.info(f"Deleting {release_branch_name}")
+            repo.delete_head(release_branch_name, force=True)
+
 def check_branch_is_main(repo):
     if repo.active_branch.name != "main":
         logger.error("Current branch is not main. Releases are allowed only from main")
@@ -163,6 +171,7 @@ def run_all(args):
 
     utils.check_repo_clean(repo)
     check_branch_is_main(repo)
+    prompt_delete_existing_release_branch(repo, release_branch_name)
     create_release_branch(repo, release_branch_name)
 
     try:
