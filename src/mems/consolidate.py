@@ -24,7 +24,7 @@ def add_subparser(subparsers):
         "-s",
         "--spares",
         dest="spares",
-        help="Number of spare components to add to every ordered position, as csv file with two columns: price, and number of spares under that price. ",
+        help="Number of spare components to add to every ordered position, as csv file with two columns: price, and number of spares as fraction of ordered amount (to be rounded up) from that price up. ",
     )
     parser.add_argument(
         "-v",
@@ -49,7 +49,7 @@ class Consolidate:
         self.bom = {}
 
         for row in self.file_list:
-            filename = f'{row[0]}/hw/fab/bom/{vendor}.csv'
+            filename = f'{row[0]}/fab/bom/{vendor}.csv'
             multiplier = int(row[1])
             try:
                 self.append_to_bom(filename, multiplier)
@@ -105,13 +105,13 @@ class Consolidate:
         for part in self.bom.keys():
             price = 0
             try:
-                spare = spare_n[np.argmax(spare_prices>float(self.bom[part]["price"]))-1]
+                spare = np.ceil(float(self.bom[part]["quantity"])*float(spare_n[np.argmax(spare_prices>float(self.bom[part]["price"]))-1]))
                 price = float(self.bom[part]["price"]) * (spare + self.bom[part]["quantity"])
-                print(self.bom[part]["price"], spare, np.argmax(spare_prices>float(self.bom[part]["price"])), spare_n[np.argmax(spare_prices>float(self.bom[part]["price"]))-1])
+                #print(self.bom[part]["price"], spare, np.argmax(spare_prices>float(self.bom[part]["price"])), spare_n[np.argmax(spare_prices>float(self.bom[part]["price"]))-1])
 
             except ValueError:
                 price = 0
-                spare = spare_n[0]
+                spare = np.ceil(float(self.bom[part]["quantity"])*float(spare_n[0]))
 
             
 
@@ -133,7 +133,7 @@ class Consolidate:
 
     def get_file_list(self):
         if self.args.path is not None and not os.path.exists(self.args.path):
-            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.path}", "red"))
+            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.path})", "red"))
         else:
             path = self.args.path
             data = []
@@ -145,7 +145,7 @@ class Consolidate:
     
     def get_spare_list(self):
         if self.args.spares is not None and not os.path.exists(self.args.spares):
-            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.spares}", "red"))
+            sys.exit(termcolor.colored(f"Error: Specified filename isn't correct ({self.args.spares})", "red"))
         else:
             path = self.args.spares
             prices = []
@@ -154,7 +154,7 @@ class Consolidate:
                 reader = csv.reader(file)
                 for row in reader:
                     prices.append(float(row[0]))
-                    spare_n.append(int(row[1]))
+                    spare_n.append(float(row[1]))
         print((np.array(prices), np.array(spare_n)))
         return (np.array(prices), np.array(spare_n))
 
